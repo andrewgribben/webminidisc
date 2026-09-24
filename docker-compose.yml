@@ -1,0 +1,8 @@
+services:
+  webminidisc:
+    build: .
+    image: webminidisc:latest
+    container_name: WebMiniDisc
+    ports:
+      - "8474:8474"
+    restart: unless-stopped

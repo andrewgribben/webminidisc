@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>WebMiniDisc</Name>
+  <Repository>webminidisc:latest</Repository>
+  <Registry/>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/asivery/webminidisc/issues</Support>
+  <Project>https://github.com/asivery/webminidisc</Project>
+  <Overview>Self-hosted Web MiniDisc Pro. Serves the app over HTTPS on port 8474 with a self-signed certificate. Open the WebUI link and accept the certificate warning once. WebUSB only works on an HTTPS page, and the MiniDisc must be plugged into the computer running the browser (Chrome, Edge, or Brave), not into the server.</Overview>
+  <Category>MediaApp:Music</Category>
+  <WebUI>https://[IP]:[PORT:8474]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/asivery/webminidisc/master/public/MiniDisc512.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI" Target="8474" Default="8474" Mode="tcp" Description="HTTPS port for Web MiniDisc Pro" Type="Port" Display="always" Required="true" Mask="false">8474</Config>
+</Container>
