@@ -17,6 +17,7 @@ import { BrowserMediaSessionService } from './services/browserintegration/media-
 import { listContent } from './redux/actions';
 import { sleep } from './utils';
 import { SettingsResetErrorBoundary } from './components/settings-reset-error-boundary';
+import { registerSW } from 'virtual:pwa-register';
 serviceRegistry.mediaRecorderService = new MediaRecorderService();
 serviceRegistry.mediaSessionService = new BrowserMediaSessionService(store);
 
@@ -29,6 +30,40 @@ const originalApplicationTitle = document.title;
 
 if (localStorage.getItem('version') !== (window as any).wmdVersion) {
     store.dispatch(appActions.showChangelogDialog(true));
+}
+
+function transferInProgress(): boolean {
+    const state = store.getState();
+    return state.uploadDialog.visible || state.recordDialog.visible || state.factoryProgressDialog.visible;
+}
+
+let serviceWorkerRefreshWaiting = false;
+let stopWatchingTransfer: (() => void) | undefined;
+
+const applyServiceWorkerUpdate = registerSW({
+    onNeedRefresh() {
+        serviceWorkerRefreshWaiting = true;
+        applyUpdateWhenIdle();
+    },
+});
+
+function applyUpdateWhenIdle() {
+    if (!serviceWorkerRefreshWaiting) {
+        return;
+    }
+    if (transferInProgress()) {
+        if (!stopWatchingTransfer) {
+            stopWatchingTransfer = store.subscribe(() => {
+                if (!transferInProgress()) {
+                    stopWatchingTransfer?.();
+                    stopWatchingTransfer = undefined;
+                    void applyServiceWorkerUpdate(true);
+                }
+            });
+        }
+        return;
+    }
+    void applyServiceWorkerUpdate(true);
 }
 
 (function setupEventHandlers() {
@@ -67,12 +102,6 @@ if (localStorage.getItem('version') !== (window as any).wmdVersion) {
         store.dispatch(appActions.setNotificationSupport(false));
         store.dispatch(appActions.setNotifyWhenFinished(false));
     }
-
-    let deferredPrompt: any;
-    window.addEventListener('beforeinstallprompt', (e: any) => {
-        e.preventDefault();
-        deferredPrompt = e;
-    });
 })();
 
 (function statusMonitorManager() {

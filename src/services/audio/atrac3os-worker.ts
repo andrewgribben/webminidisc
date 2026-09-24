@@ -1,5 +1,6 @@
 function getPublicPathFor(script: string) {
-    return `${import.meta.env.BASE_URL}${script}`;
+    const base = import.meta.env.BASE_URL || '/';
+    return new URL(script, new URL(base, `${self.location.origin}/`)).href;
 }
 
 type MemImage = { start: number, fill?: { value: number, length: number }, data?: Uint8Array}[];

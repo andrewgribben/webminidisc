@@ -180,6 +180,7 @@ interface TrackRowProps {
     onRename: (event: React.MouseEvent, trackIdx: number) => void;
     onTogglePlayPause: (event: React.MouseEvent, trackIdx: number) => void;
     onOpenContextMenu: (event: React.MouseEvent) => void;
+    savedCopy?: boolean;
 }
 
 export function MockTrackRow({ isHimdTrack }: { isHimdTrack: boolean }) {
@@ -211,6 +212,7 @@ export function TrackRow({
     onRename,
     onTogglePlayPause,
     onOpenContextMenu,
+    savedCopy,
 }: TrackRowProps) {
     const minidiscSpec = serviceRegistry.netmdSpec;
     const formatInfo = minidiscSpec!.availableFormats.find(
@@ -275,6 +277,7 @@ export function TrackRow({
             <TableCell className={classes.titleCell} title={track.title ?? ''}>
                 {track.fullWidthTitle ? `${track.fullWidthTitle} / ` : ``}
                 {track.title || `No Title`}
+                {savedCopy ? ' · saved' : ''}
             </TableCell>
             {isHimdTrack && (
                 <>

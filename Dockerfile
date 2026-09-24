@@ -22,13 +22,18 @@ COPY . .
 RUN git config --global --add safe.directory /src \
     && CI=false PUBLIC_URL=./ HUSKY=0 npm run build
 
-FROM alpine:3.21
+# Pin Downtify 3.1.0. Do not float :latest; the port 4534 app is updated on its own.
+FROM henriquesebastiao/downtify@sha256:fa1ec39be35b8de29c9ca257631710beaec0cd51908b39ec2bb49b998e3d6a08
 
-RUN apk add --no-cache nginx openssl tini \
-    && mkdir -p /var/log/nginx /var/lib/nginx/tmp /run/nginx \
-    && rm -f /etc/nginx/http.d/default.conf
+USER root
 
-COPY docker/nginx.conf /etc/nginx/http.d/default.conf
+RUN apk add --no-cache ca-certificates nginx openssl \
+    && mkdir -p /var/log/nginx /var/lib/nginx/tmp /run/nginx /usr/share/licenses/downtify \
+    && rm -f /etc/nginx/http.d/default.conf \
+    && python -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/henriquesebastiao/downtify/main/LICENSE', '/usr/share/licenses/downtify/LICENSE')"
+
+COPY docker/downtify-NOTICE /usr/share/licenses/downtify/NOTICE
+COPY docker/nginx.conf /etc/nginx/http.d/default.conf.template
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

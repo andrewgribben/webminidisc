@@ -7,8 +7,6 @@ export class AtracdencAudioExportService extends DefaultFfmpegAudioExportService
 
     async prepare(file: File): Promise<void> {
         await super.prepare(file);
-        this.atracdencProcess = new AtracdencProcess(new Worker(new URL('./atracdenc-worker', import.meta.url), { type: 'classic' }));
-        await this.atracdencProcess.init();
     }
 
     async encodeATRAC3Plus(parameters: ExportParams): Promise<ArrayBuffer> {
@@ -35,8 +33,13 @@ export class AtracdencAudioExportService extends DefaultFfmpegAudioExportService
             default:
                 throw new Error('Invalid format');
         }
-        const result = await this.atracdencProcess!.encode(data.buffer as ArrayBuffer, bitrate);
-        this.atracdencProcess?.terminate();
+        if (!this.atracdencProcess) {
+            this.atracdencProcess = new AtracdencProcess(new Worker(new URL('./atracdenc-worker', import.meta.url), { type: 'classic' }));
+            await this.atracdencProcess.init();
+        }
+        const result = await this.atracdencProcess.encode(data.buffer as ArrayBuffer, bitrate);
+        this.atracdencProcess.terminate();
+        this.atracdencProcess = undefined;
         return result;
     }
 

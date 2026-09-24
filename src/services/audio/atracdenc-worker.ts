@@ -1,6 +1,7 @@
 /* eslint no-restricted-globals: 0 */
 function getPublicPathFor(script: string) {
-    return `${import.meta.env.BASE_URL}${script}`;
+    const base = import.meta.env.BASE_URL || '/';
+    return new URL(script, new URL(base, `${self.location.origin}/`)).href;
 }
 export class AtracdencProcess {
     private messageCallback?: (ev: MessageEvent) => void;

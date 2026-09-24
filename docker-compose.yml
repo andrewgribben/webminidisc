@@ -5,4 +5,10 @@ services:
     container_name: WebMiniDisc
     ports:
       - "8474:8474"
+    environment:
+      DOWNTIFY_UPSTREAM: http://127.0.0.1:8000
+      MD_LIBRARY_UPSTREAM: http://192.168.5.3:8475
+    volumes:
+      - /mnt/user/media/Music:/downloads
+      - /mnt/user/appdata/webminidisc-downtify:/data
     restart: unless-stopped

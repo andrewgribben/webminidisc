@@ -50,7 +50,7 @@ export interface AdaptiveFile {
     album: string;
     artist: string;
     duration: number;
-    getForEncoding(encoding: ExportParams): Promise<ArrayBuffer>;
+    getForEncoding(encoding: ExportParams, onProgress?: (progress: { state: number; total: number }) => void): Promise<ArrayBuffer>;
 }
 
 export type TitledFile = {

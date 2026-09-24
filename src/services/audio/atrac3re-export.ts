@@ -45,11 +45,14 @@ export class Atrac3REExportService extends DefaultFfmpegAudioExportService {
     public ready?: Promise<void>;
 
     async prepare(file: File): Promise<void> {
+        await super.prepare(file);
+    }
+
+    private ensureEncoder() {
         if (!this.atrac3REProcess) {
             this.atrac3REProcess = new Atrac3Re(new Worker(new URL('./atrac3re-worker', import.meta.url), { type: 'classic' }));
             this.ready = this.atrac3REProcess.init();
         }
-        await super.prepare(file);
     }
 
     async encodeATRAC3(parameters: ExportParams, callback?: (obj: { state: number; total: number }) => void): Promise<ArrayBuffer> {
@@ -59,7 +62,8 @@ export class Atrac3REExportService extends DefaultFfmpegAudioExportService {
         const { data } = (await this.ffmpegProcess.read(outFileName)) as { data: Uint8Array };
         const length = data.length;
 
-        await this.ready; // Make sure Worker is ready
+        this.ensureEncoder();
+        await this.ready;
 
         const finished = !parameters.writeGapless;
 

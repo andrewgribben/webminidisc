@@ -21,6 +21,7 @@ import factoryEditOtherValuesDialog from './factory/factory-edit-other-values-di
 import factoryBadSectorDialog from './factory/factory-bad-sector-dialog-feature';
 
 import main from './main-feature';
+import discLibrary from './disc-library-feature';
 import { BatchAction, batchActions, batchDispatchMiddleware } from 'redux-batched-actions';
 
 const errorCatcher: Middleware = (store) => (next) => async (action) => {
@@ -55,6 +56,7 @@ const reducer = combineReducers({
     factoryBadSectorDialog,
     appState,
     main,
+    discLibrary,
 });
 
 const resetStateAction = appActions.setMainView.toString();

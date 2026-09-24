@@ -36,6 +36,7 @@ import { OtherDeviceDialog } from './other-device-dialog';
 import { SettingsDialog } from './settings-dialog';
 import { ChangelogDialog } from './changelog-dialog';
 import { AboutDialog } from './about-dialog';
+import { DowntifyBar } from './downtify-bar';
 
 import { actions as otherDialogActions } from '../redux/other-device-feature';
 import { actions as appActions } from '../redux/app-feature';
@@ -238,6 +239,7 @@ export const Welcome = (props: {}) => {
                             >
                                 <FormHelperText>{pairingMessage}</FormHelperText>
                             </FormControl>
+                            <DowntifyBar />
                             {!window.native?.interface && (
                                 <Tooltip
                                     title={

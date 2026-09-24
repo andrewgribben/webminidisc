@@ -24,7 +24,10 @@ export default ({ mode }) => {
         exclude: ['buffer'],
       }),
       VitePWA({
-        registerType: 'autoUpdate',
+        // Wait until this page asks. autoUpdate calls skipWaiting immediately, and a
+        // reload during recording closes the WebUSB session.
+        registerType: 'prompt',
+        injectRegister: null,
         manifestFilename: 'manifest.json',
         manifest: {
           "short_name": "Web MiniDisc",
@@ -55,6 +58,7 @@ export default ({ mode }) => {
           "splash_pages": null
         },
         workbox: {
+          cleanupOutdatedCaches: true,
           maximumFileSizeToCacheInBytes: 1024 * 1024 * 10, // 10 MiB
           runtimeCaching: [
             {

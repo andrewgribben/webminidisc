@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/asivery/webminidisc/issues</Support>
   <Project>https://github.com/asivery/webminidisc</Project>
-  <Overview>Self-hosted Web MiniDisc Pro. Serves the app over HTTPS on port 8474 with a self-signed certificate. Open the WebUI link and accept the certificate warning once. WebUSB only works on an HTTPS page, and the MiniDisc must be plugged into the computer running the browser (Chrome, Edge, or Brave), not into the server.</Overview>
+  <Overview>Self-hosted Web MiniDisc Pro. Serves the app over HTTPS on port 8474 with a self-signed certificate. Open the WebUI link and accept the certificate warning once. WebUSB only works on an HTTPS page, and the MiniDisc must be plugged into the computer running the browser (Chrome, Edge, or Brave), not into the server. This container runs its own Downtify on 127.0.0.1:8000 (not published) and proxies it at /downtify/. That copy has private settings, defaults to FLAC, and writes into the shared music folder. It does not replace the separate Downtify app. /md-library/ is proxied to the MiniDisc metadata service, which stores album matches and playable WAV copies.</Overview>
   <Category>MediaApp:Music</Category>
   <WebUI>https://[IP]:[PORT:8474]/</WebUI>
   <TemplateURL/>
@@ -22,4 +22,8 @@
   <DonateLink/>
   <Requires/>
   <Config Name="WebUI" Target="8474" Default="8474" Mode="tcp" Description="HTTPS port for Web MiniDisc Pro" Type="Port" Display="always" Required="true" Mask="false">8474</Config>
+  <Config Name="Music" Target="/downloads" Default="/mnt/user/media/Music" Mode="rw" Description="Shared music folder. The embedded Downtify saves here, alongside files from the separate Downtify app." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/Music</Config>
+  <Config Name="Embedded Downtify Data" Target="/data" Default="/mnt/user/appdata/webminidisc-downtify" Mode="rw" Description="Private settings and database for the Downtify inside Web MiniDisc. Do not point this at the other Downtify app's appdata." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/webminidisc-downtify</Config>
+  <Config Name="Downtify Upstream" Target="DOWNTIFY_UPSTREAM" Default="http://127.0.0.1:8000" Mode="" Description="Downtify base URL reachable from this container. Leave this as http://127.0.0.1:8000 to use the embedded copy. The browser uses /downtify/ on this app, which is proxied here." Type="Variable" Display="always" Required="false" Mask="false">http://127.0.0.1:8000</Config>
+  <Config Name="MiniDisc Library Upstream" Target="MD_LIBRARY_UPSTREAM" Default="http://192.168.5.3:8475" Mode="" Description="MiniDisc metadata service base URL reachable from this container. The browser uses /md-library/ on this app, which is proxied here. Do not use host port 8000." Type="Variable" Display="always" Required="false" Mask="false">http://192.168.5.3:8475</Config>
 </Container>

@@ -25,6 +25,7 @@ import {
     formatTimeFromSeconds,
     getGroupedTracks,
     getSortedTracks,
+    getTracks,
     isSequential,
     acceptedTypes,
     AdaptiveFile,
@@ -81,6 +82,11 @@ import { FactoryModeBadSectorDialog } from './factory/factory-bad-sector-dialog'
 import { DiscProtectedDialog } from './disc-protected-dialog';
 import { ContextMenu } from './context-menu';
 import { LocalLibraryDialog } from './local-library';
+import { DowntifyBar } from './downtify-bar';
+import { MatchAlbumDialog } from './match-album-dialog';
+import { DowntifyLibraryService } from '../services/library/downtify-library';
+import { actions as discLibraryActions } from '../redux/disc-library-feature';
+import { loadKnownDisc, saveDiscAudio } from '../redux/disc-library-actions';
 import { Menu, MenuItem } from '@mui/material';
 import serviceRegistry from '../services/registry';
 
@@ -191,6 +197,12 @@ export const Main = (props: {}) => {
     const flushable = useShallowEqualSelector((state) => state.main.flushable);
     const deviceName = useShallowEqualSelector((state) => state.main.deviceName);
     const deviceStatus = useShallowEqualSelector((state) => state.main.deviceStatus);
+    const savedAudioIndexes = useShallowEqualSelector((state) => state.discLibrary.audioIndexes);
+    const filePlaying = useShallowEqualSelector((state) => state.discLibrary.playing);
+    const filePlayingIndex = useShallowEqualSelector((state) => state.discLibrary.playingIndex);
+    const libraryStatus = useShallowEqualSelector((state) => state.discLibrary.status);
+    const albumCoverUrl = useShallowEqualSelector((state) => state.discLibrary.coverUrl);
+    const albumTitle = useShallowEqualSelector((state) => state.discLibrary.title);
     const factoryModeRippingInMainUi = useShallowEqualSelector((state) => state.appState.factoryModeRippingInMainUi);
     const { vintageMode } = useShallowEqualSelector((state) => state.appState);
 
@@ -200,6 +212,8 @@ export const Main = (props: {}) => {
     const [lastClicked, setLastClicked] = useState(-1);
     const [moveMenuAnchorEl, setMoveMenuAnchorEl] = React.useState<null | HTMLElement>(null);
     const [showRemainingSpace, setShowRemainingSpace] = useState(true);
+    const [matchOpen, setMatchOpen] = useState(false);
+    const [coverFailed, setCoverFailed] = useState(false);
 
     const deviceCapabilities = useDeviceCapabilities();
     const minidiscSpec = serviceRegistry.netmdSpec;
@@ -281,6 +295,14 @@ export const Main = (props: {}) => {
 
     const { classes, cx } = useStyles();
     const tracks = useMemo(() => getSortedTracks(disc), [disc]);
+    const discKey = useMemo(() => {
+        if (!disc) {
+            return '';
+        }
+        return getTracks(disc)
+            .map((track) => `${track.index}:${Math.round(track.duration * 1000)}`)
+            .join('|');
+    }, [disc]);
     const groupedTracks = useMemo(() => getGroupedTracks(disc), [disc]);
     const defaultCodecName = minidiscSpec ? getDefaultCodecName(minidiscSpec) : '';
 
@@ -464,6 +486,14 @@ export const Main = (props: {}) => {
 
     const handleTogglePlayPauseTrack = useCallback(
         (event: React.MouseEvent, track: number) => {
+            if (savedAudioIndexes.includes(track)) {
+                if (filePlaying && filePlayingIndex === track) {
+                    dispatch(discLibraryActions.setPlaying(false));
+                } else {
+                    dispatch(discLibraryActions.playTrack(track));
+                }
+                return;
+            }
             if (!deviceStatus) {
                 return;
             }
@@ -476,7 +506,7 @@ export const Main = (props: {}) => {
                 dispatch(control('play'));
             }
         },
-        [dispatch, deviceStatus]
+        [dispatch, deviceStatus, savedAudioIndexes, filePlaying, filePlayingIndex]
     );
 
     const canGroup = useMemo(() => {
@@ -507,6 +537,27 @@ export const Main = (props: {}) => {
         setUploadMenuAnchorEl(null);
         dispatch(openLocalLibrary());
     }, [dispatch]);
+
+    useEffect(() => {
+        dispatch(loadKnownDisc());
+    }, [discKey, dispatch]);
+
+    useEffect(() => {
+        setCoverFailed(false);
+    }, [albumCoverUrl]);
+
+    const savedTrackStatus = useCallback(
+        (track: Track): 'playing' | 'paused' | 'none' => {
+            if (!savedAudioIndexes.includes(track.index)) {
+                return getTrackStatus(track, deviceStatus);
+            }
+            if (filePlayingIndex !== track.index) {
+                return 'none';
+            }
+            return filePlaying ? 'playing' : 'paused';
+        },
+        [savedAudioIndexes, filePlaying, filePlayingIndex, deviceStatus]
+    );
 
     if (vintageMode) {
         const p = {
@@ -623,6 +674,42 @@ export const Main = (props: {}) => {
                     `No disc loaded`
                 )}
             </Typography>
+            <DowntifyBar onUseFiles={setUploadedFiles} />
+            {disc ? (
+                <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mt: 1 }}>
+                    {albumCoverUrl && !coverFailed ? (
+                        <Box
+                            component="img"
+                            src={albumCoverUrl}
+                            alt=""
+                            onError={() => setCoverFailed(true)}
+                            sx={{ width: 72, height: 72, objectFit: 'cover', flex: '0 0 auto' }}
+                        />
+                    ) : null}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
+                        {albumTitle ? (
+                            <Typography variant="subtitle1" noWrap>
+                                {albumTitle}
+                            </Typography>
+                        ) : null}
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Button size="small" variant="outlined" onClick={() => setMatchOpen(true)}>
+                        Match album
+                    </Button>
+                    <Tooltip title="Copy tracks off the disc, convert them to WAV, and store them. The player for those files is separate from the MiniDisc controls.">
+                        <Button size="small" variant="outlined" onClick={() => dispatch(saveDiscAudio(selected))} disabled={tracks.length === 0}>
+                            Save audio
+                        </Button>
+                    </Tooltip>
+                    {libraryStatus ? (
+                        <Typography variant="caption" color="textSecondary">
+                            {libraryStatus}
+                        </Typography>
+                    ) : null}
+                    </Box>
+                    </Box>
+                </Box>
+            ) : null}
             <Toolbar
                 className={cx(classes.toolbar, {
                     [classes.toolbarHighlight]: selectedCount > 0 || selectedGroupsCount > 0,
@@ -797,7 +884,8 @@ export const Main = (props: {}) => {
                                                                             draggableProvided={provided}
                                                                             inGroup={group.title !== null}
                                                                             isSelected={selected.includes(t.index)}
-                                                                            trackStatus={getTrackStatus(t, deviceStatus)}
+                                                                            trackStatus={savedTrackStatus(t)}
+                                                                            savedCopy={savedAudioIndexes.includes(t.index)}
                                                                             onSelect={handleSelectTrackClick}
                                                                             onRename={handleRenameTrack}
                                                                             onTogglePlayPause={handleTogglePlayPauseTrack}
@@ -838,7 +926,9 @@ export const Main = (props: {}) => {
                 >
                     Upload from this machine
                 </MenuItem>
-                <MenuItem onClick={handleOpenLocalLibrary}>Upload from library</MenuItem>
+                <MenuItem onClick={handleOpenLocalLibrary}>
+                    {serviceRegistry.libraryService instanceof DowntifyLibraryService ? 'Upload from Downtify' : 'Upload from library'}
+                </MenuItem>
             </Menu>
 
             <DiscProtectedDialog />
@@ -863,6 +953,7 @@ export const Main = (props: {}) => {
             <LocalLibraryDialog setUploadedFiles={setUploadedFiles} />
             <PanicDialog />
             <ContextMenu onTogglePlayPause={handleTogglePlayPauseTrack} onRename={handleRenameTrack} onDelete={handleDeleteTrack} />
+            <MatchAlbumDialog open={matchOpen} onClose={() => setMatchOpen(false)} />
         </React.Fragment>
     );
 };

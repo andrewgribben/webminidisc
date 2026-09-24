@@ -22,6 +22,7 @@ import { AdaptiveFile, formatTimeFromSeconds } from '../utils';
 import { makeStyles } from 'tss-react/mui';
 import serviceRegistry from '../services/registry';
 import { ExportParams } from '../services/audio/audio-export';
+import { DowntifyLibraryService } from '../services/library/downtify-library';
 import { LocalDatabase } from '../services/library/library';
 import { File, FileBrowser } from './file-browser/browser';
 import { Add, ArrowUpward } from '@mui/icons-material';
@@ -197,8 +198,8 @@ export const LocalLibraryDialog = ({ setUploadedFiles }: { setUploadedFiles: (fi
                 name: pathTokens[pathTokens.length - 1] || 'unknown.unk',
                 duration: file.duration,
 
-                getForEncoding: async (params: ExportParams) => {
-                    return serviceRegistry.libraryService!.processLocalLibraryFile(file.path, params);
+                getForEncoding: async (params: ExportParams, onProgress?: (progress: { state: number; total: number }) => void) => {
+                    return serviceRegistry.libraryService!.processLocalLibraryFile(file.path, params, onProgress);
                 },
             };
             return adaptiveFile;
@@ -212,7 +213,7 @@ export const LocalLibraryDialog = ({ setUploadedFiles }: { setUploadedFiles: (fi
 
     return (
         <Dialog
-            open={visible}
+            open={visible && !(serviceRegistry.libraryService instanceof DowntifyLibraryService)}
             maxWidth={'sm'}
             fullWidth={true}
             fullScreen={true}

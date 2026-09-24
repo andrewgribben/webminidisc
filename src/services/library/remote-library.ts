@@ -37,7 +37,11 @@ export class RemoteLibraryService extends DefaultFfmpegAudioExportService implem
         return json as LocalDatabase;
     }
 
-    async processLocalLibraryFile(filePath: string, params: ExportParams): Promise<ArrayBuffer> {
+    async processLocalLibraryFile(
+        filePath: string,
+        params: ExportParams,
+        onProgress?: (progress: { state: number; total: number }) => void
+    ): Promise<ArrayBuffer> {
         if (params.format.codec === 'PCM' || params.format.codec === 'MP3') {
             // Fetch the file normally, then transcode to PCM / MP3
             const rawURL = new URL(this.address);
@@ -60,7 +64,7 @@ export class RemoteLibraryService extends DefaultFfmpegAudioExportService implem
             const fileName = fileTokens[fileTokens.length - 1];
             const asFile = new File([await response.blob()], fileName);
             await this.prepare(asFile);
-            return this.export(params);
+            return this.export(params, onProgress);
         } else {
             const { format, enableReplayGain } = params;
             const encodingURL = new URL(this.address);

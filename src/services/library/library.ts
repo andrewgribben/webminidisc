@@ -6,5 +6,9 @@ export type LocalDatabase = { [filename: string]: LocalDatabase | { artist: stri
 // FIX THIS
 export interface LibraryService {
     getDatabase(): Promise<LocalDatabase>;
-    processLocalLibraryFile(filePath: string, params: ExportParams): Promise<ArrayBuffer>;
+    processLocalLibraryFile(
+        filePath: string,
+        params: ExportParams,
+        onProgress?: (progress: { state: number; total: number }) => void
+    ): Promise<ArrayBuffer>;
 }

@@ -12,6 +12,7 @@ import Typography from '@mui/material/Typography';
 import Link from '@mui/material/Link';
 import Box from '@mui/material/Box';
 import { W95App } from './win95/app';
+import { FilePlayer } from './file-player';
 
 const Toc = lazy(() => import('./factory/factory'));
 const Controls = lazy(() => import('./controls'));
@@ -250,6 +251,7 @@ const InternalApp = () => {
                         {mainView === 'WELCOME' ? <Welcome /> : null}
                         {mainView === 'MAIN' ? <Main /> : null}
                         {mainView === 'FACTORY' ? <Toc /> : null}
+                        {mainView === 'MAIN' ? <FilePlayer /> : null}
 
                         <Box className={classes.controlsContainer}>{mainView === 'MAIN' ? <Controls /> : null}</Box>
                     </Paper>

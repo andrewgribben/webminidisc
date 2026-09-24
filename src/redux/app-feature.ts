@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { enableBatching } from 'redux-batched-actions';
-import { CustomParameters } from '../custom-parameters';
+import { CustomParameters, initializeParameters } from '../custom-parameters';
+import { LibraryServices } from '../services/library-services';
 import { filterOutCorrupted, getSimpleServices, ServiceConstructionInfo } from '../services/interface-service-manager';
 import { savePreference, loadPreference } from '../utils';
 
@@ -39,6 +40,10 @@ export interface AppState {
     factoryModeNERAWDownload: boolean;
 }
 
+const defaultDowntifyLibraryIndex = LibraryServices.findIndex((service) => service.name === 'Downtify');
+const defaultDowntifyLibraryConfig =
+    defaultDowntifyLibraryIndex === -1 ? {} : initializeParameters(LibraryServices[defaultDowntifyLibraryIndex].customParameters);
+
 export const buildInitialState = (): AppState => {
     return {
         mainView: 'WELCOME',
@@ -64,8 +69,8 @@ export const buildInitialState = (): AppState => {
         // it should not be stored in the preferences, and should default to false.
         audioExportService: loadPreference('audioExportService', 0),
         audioExportServiceConfig: loadPreference('audioExportServiceConfig', {}),
-        libraryService: loadPreference('libraryService', -1),
-        libraryServiceConfig: loadPreference('libraryServiceConfig', {}),
+        libraryService: loadPreference('libraryService', defaultDowntifyLibraryIndex),
+        libraryServiceConfig: loadPreference('libraryServiceConfig', defaultDowntifyLibraryConfig),
         pageFullHeight: loadPreference('pageFullHeight', false),
         pageFullWidth: loadPreference('pageFullWidth', false),
         archiveDiscCreateZip: loadPreference('archiveDiscCreateZip', false),

@@ -27,6 +27,8 @@ export abstract class DefaultFfmpegAudioExportService implements AudioExportServ
     public loglines: { action: string; message: string }[] = [];
     public inFileName: string = ``;
     public outFileNameNoExt: string = ``;
+    private ffmpegDurationSec = 0;
+    private ffmpegProgress?: (ratio: number) => void;
 
     async init() {
         setLogging(true);
@@ -51,8 +53,9 @@ export abstract class DefaultFfmpegAudioExportService implements AudioExportServ
         this.ffmpegProcess = createWorker({
             logger: (payload: LogPayload) => {
                 this.loglines.push(payload);
-                console.log(payload.action, payload.message);
+                this.noteFfmpegMessage(payload.message);
             },
+            progress: () => undefined,
             corePath: getPublicPathFor('ffmpeg-core.js'),
             workerPath: getPublicPathFor('worker.min.js'),
         });
@@ -116,11 +119,11 @@ export abstract class DefaultFfmpegAudioExportService implements AudioExportServ
         const { format } = parameters;
         let result: ArrayBuffer;
         if (format.codec === `PCM`) {
-            result = await this.encodePCM(parameters);
+            result = await this.encodePCM(parameters, callback);
         } else if (format.codec === 'AT3') {
             result = await this.encodeATRAC3(parameters, callback);
         } else if (format.codec === 'MP3') {
-            result = await this.encodeMP3(parameters);
+            result = await this.encodeMP3(parameters, callback);
         } else if (format.codec === 'A3+') {
             result = await this.encodeATRAC3Plus(parameters, callback);
         } else throw new Error('Invalid format');
@@ -128,22 +131,57 @@ export abstract class DefaultFfmpegAudioExportService implements AudioExportServ
         return result;
     }
 
-    async encodePCM(parameters: ExportParams): Promise<ArrayBuffer> {
-        const ffmpegCommand = await this.createFfmpegParams(parameters, 's16be');
-        const outFileName = `${this.outFileNameNoExt}.raw`;
-        await this.ffmpegProcess.transcode(this.inFileName, outFileName, ffmpegCommand);
-        const { data } = await this.ffmpegProcess.read(outFileName);
-        return data.buffer;
+    async encodePCM(parameters: ExportParams, callback?: (obj: { state: number; total: number }) => void): Promise<ArrayBuffer> {
+        return this.transcodeWithProgress(parameters, 's16be', `${this.outFileNameNoExt}.raw`, callback);
     }
 
-    async encodeMP3(parameters: ExportParams): Promise<ArrayBuffer> {
+    async encodeMP3(parameters: ExportParams, callback?: (obj: { state: number; total: number }) => void): Promise<ArrayBuffer> {
         const ffmpegCommand = await this.createFfmpegParams(
             parameters,
             'mp3',
             `-map 0:a:0 -c:a libmp3lame -b:a ${parameters.format.bitrate!}k`
         );
-        const outFileName = `${this.outFileNameNoExt}.mp3`;
-        await this.ffmpegProcess.transcode(this.inFileName, outFileName, ffmpegCommand);
+        return this.finishTranscode(`${this.outFileNameNoExt}.mp3`, ffmpegCommand, callback);
+    }
+
+    private noteFfmpegMessage(message: string | undefined) {
+        if (!message || !this.ffmpegProgress) {
+            return;
+        }
+        const duration = message.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+        if (duration) {
+            this.ffmpegDurationSec = Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]);
+        }
+        const time = message.match(/time=\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+        if (time && this.ffmpegDurationSec > 0) {
+            const seconds = Number(time[1]) * 3600 + Number(time[2]) * 60 + Number(time[3]);
+            this.ffmpegProgress(Math.max(0, Math.min(1, seconds / this.ffmpegDurationSec)));
+        }
+    }
+
+    private async transcodeWithProgress(
+        parameters: ExportParams,
+        outputFormat: string,
+        outFileName: string,
+        callback?: (obj: { state: number; total: number }) => void
+    ): Promise<ArrayBuffer> {
+        const ffmpegCommand = await this.createFfmpegParams(parameters, outputFormat);
+        return this.finishTranscode(outFileName, ffmpegCommand, callback);
+    }
+
+    private async finishTranscode(
+        outFileName: string,
+        ffmpegCommand: string,
+        callback?: (obj: { state: number; total: number }) => void
+    ): Promise<ArrayBuffer> {
+        this.ffmpegDurationSec = 0;
+        this.ffmpegProgress = (ratio) => callback?.({ state: Math.round(ratio * 1000), total: 1000 });
+        try {
+            await this.ffmpegProcess.transcode(this.inFileName, outFileName, ffmpegCommand);
+            callback?.({ state: 1000, total: 1000 });
+        } finally {
+            this.ffmpegProgress = undefined;
+        }
         const { data } = await this.ffmpegProcess.read(outFileName);
         return data.buffer;
     }

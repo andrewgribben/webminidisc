@@ -24,6 +24,17 @@ import { renderCustomParameter } from './custom-parameters-renderer';
 import { initializeParameters, isAllValid } from '../custom-parameters';
 import { SettingInterface } from '../bridge-types';
 import { LibraryServices } from '../services/library-services';
+import {
+    deleteEmbeddedDowntifyCookies,
+    EMBEDDED_DOWNTIFY_FORMATS,
+    EmbeddedDowntifyFormat,
+    embeddedDowntifyFormatLabel,
+    readEmbeddedLibraryOptions,
+    uploadEmbeddedDowntifyCookies,
+    writeEmbeddedDowntifyFormat,
+    writeEmbeddedYoutubeFallback,
+    DowntifyCookieStatus,
+} from '../services/library/downtify-library';
 
 const Transition = React.forwardRef(function Transition(props: SlideProps, ref: React.Ref<unknown>) {
     return <Slide direction="up" ref={ref} {...props} />;
@@ -83,6 +94,13 @@ const useStyles = makeStyles()((theme) => ({
     marginApply: {
         marginLeft: theme.spacing(2),
         paddingRight: theme.spacing(2),
+    },
+    row: {
+        display: 'flex',
+        gap: theme.spacing(1),
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end',
     },
     noLeftMargin: {
         marginLeft: 0,
@@ -200,6 +218,39 @@ export const SettingsDialog = (props: {}) => {
     const [currentLibraryServiceConfig, setLibraryServiceConfig] = useState(globalStateLibraryServiceConfig);
     const currentService = AudioServices[currentExportService ?? 0];
     const currentLibrary = LibraryServices[currentLibraryService ?? -1];
+    const [downtifyFormat, setDowntifyFormat] = useState<EmbeddedDowntifyFormat>('flac');
+    const [downtifyFormatReady, setDowntifyFormatReady] = useState(false);
+    const [downtifyFormatError, setDowntifyFormatError] = useState<string | null>(null);
+    const [youtubeFallback, setYoutubeFallback] = useState(false);
+    const [cookies, setCookies] = useState<DowntifyCookieStatus | null>(null);
+    const [cookiesBusy, setCookiesBusy] = useState(false);
+
+    useEffect(() => {
+        if (!visible) {
+            return;
+        }
+        let cancelled = false;
+        setDowntifyFormatReady(false);
+        readEmbeddedLibraryOptions()
+            .then((options) => {
+                if (!cancelled) {
+                    setDowntifyFormat(options.format);
+                    setYoutubeFallback(options.youtubeFallback);
+                    setCookies(options.cookies);
+                    setDowntifyFormatError(null);
+                    setDowntifyFormatReady(true);
+                }
+            })
+            .catch((err: unknown) => {
+                if (!cancelled) {
+                    setDowntifyFormatError(err instanceof Error ? err.message : 'Could not read Downtify settings');
+                    setDowntifyFormatReady(false);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [visible]);
 
     // Functions required for the app to calculate weather or not it needs to restart to apply the changes,
     // create the initial state, etc...
@@ -278,7 +329,6 @@ export const SettingsDialog = (props: {}) => {
     const handleToggleFactoryModeNERAWDownload = useCallback(() => {
         dispatch(appActions.setFactoryModeNERAWDownload(!factoryModeNERAWDownload));
     }, [dispatch, factoryModeNERAWDownload]);
-
     //Encoder configuration
     const handleExportServiceChanges = useCallback((event: any) => {
         const serviceId = event.target.value as number;
@@ -298,6 +348,62 @@ export const SettingsDialog = (props: {}) => {
         setCurrentLibraryService(serviceId);
         if (serviceId === -1) return;
         setLibraryServiceConfig(initializeParameters(LibraryServices[serviceId].customParameters));
+    }, []);
+
+    const handleDowntifyFormatChange = useCallback((event: { target: { value: unknown } }) => {
+        const format = event.target.value;
+        if (typeof format !== 'string' || !(EMBEDDED_DOWNTIFY_FORMATS as readonly string[]).includes(format)) {
+            return;
+        }
+        const next = format as EmbeddedDowntifyFormat;
+        setDowntifyFormat(next);
+        setDowntifyFormatError(null);
+        writeEmbeddedDowntifyFormat(next).catch((err: unknown) => {
+            setDowntifyFormatError(err instanceof Error ? err.message : 'Could not save Downtify format');
+        });
+    }, []);
+
+    const handleYoutubeFallbackChange = useCallback(() => {
+        const next = !youtubeFallback;
+        setYoutubeFallback(next);
+        setDowntifyFormatError(null);
+        writeEmbeddedYoutubeFallback(next).catch((err: unknown) => {
+            setYoutubeFallback(!next);
+            setDowntifyFormatError(err instanceof Error ? err.message : 'Could not save YouTube fallback');
+        });
+    }, [youtubeFallback]);
+
+    const handleCookieFile = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) {
+            return;
+        }
+        setCookiesBusy(true);
+        setDowntifyFormatError(null);
+        file
+            .text()
+            .then((content) => uploadEmbeddedDowntifyCookies(content))
+            .then((next) => {
+                setCookies(next);
+                const warning = next.warnings && next.warnings.length > 0 ? next.warnings.join(' ') : null;
+                setDowntifyFormatError(warning);
+            })
+            .catch((err: unknown) => {
+                setDowntifyFormatError(err instanceof Error ? err.message : 'Could not save cookies.txt');
+            })
+            .finally(() => setCookiesBusy(false));
+    }, []);
+
+    const handleDeleteCookies = useCallback(() => {
+        setCookiesBusy(true);
+        setDowntifyFormatError(null);
+        deleteEmbeddedDowntifyCookies()
+            .then(() => setCookies({ configured: false, locked: false, source: null }))
+            .catch((err: unknown) => {
+                setDowntifyFormatError(err instanceof Error ? err.message : 'Could not remove cookies.txt');
+            })
+            .finally(() => setCookiesBusy(false));
     }, []);
 
     const handleLibraryServiceParameterChange = useCallback((varName: string, value: string | number | boolean) => {
@@ -442,6 +548,57 @@ export const SettingsDialog = (props: {}) => {
                         </Box>
                     </>
                 )}
+                <SimpleField
+                    name="Embedded Downtify download format"
+                    classes={classes}
+                    tooltip="Format used by the Downtify running inside Web MiniDisc. FLAC is the best source for MiniDisc SP. This does not change the separate Downtify app."
+                >
+                    <Select
+                        className={classes.wider}
+                        value={downtifyFormat}
+                        onChange={handleDowntifyFormatChange}
+                        disabled={!downtifyFormatReady}
+                    >
+                        {EMBEDDED_DOWNTIFY_FORMATS.map((format) => (
+                            <MenuItem value={format} key={format}>
+                                {embeddedDowntifyFormatLabel(format)}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </SimpleField>
+                <SimpleField
+                    name="Search YouTube if YouTube Music has no close match"
+                    classes={classes}
+                    formControl={true}
+                    tooltip="YouTube Music is tried first. When it has no close match, regular YouTube is searched next. This does not change the separate Downtify app."
+                >
+                    <Switch checked={youtubeFallback} onChange={handleYoutubeFallbackChange} disabled={!downtifyFormatReady} />
+                </SimpleField>
+                <SimpleField
+                    name="YouTube cookies.txt"
+                    classes={classes}
+                    tooltip="Netscape cookies.txt exported while logged into YouTube. Used when a track is age-restricted or YouTube asks for a sign-in. This copy already has the file from the other Downtify if one was uploaded there."
+                >
+                    <Box className={classes.row}>
+                        <Typography variant="caption" color="textSecondary">
+                            {cookies?.configured ? 'Cookies are set.' : 'No cookies file.'}
+                        </Typography>
+                        <Button size="small" component="label" disabled={!downtifyFormatReady || cookiesBusy || cookies?.locked === true}>
+                            {cookies?.configured ? 'Replace' : 'Upload'}
+                            <input hidden type="file" accept=".txt,text/plain" onChange={handleCookieFile} />
+                        </Button>
+                        {cookies?.configured && !cookies.locked ? (
+                            <Button size="small" disabled={cookiesBusy} onClick={handleDeleteCookies}>
+                                Remove
+                            </Button>
+                        ) : null}
+                    </Box>
+                </SimpleField>
+                {downtifyFormatError ? (
+                    <Typography className={classes.encoderDescription} color="error">
+                        {downtifyFormatError}
+                    </Typography>
+                ) : null}
                 <NativeFields classes={classes} section="Encoding" />
             </DialogContent>
             <DialogActions>

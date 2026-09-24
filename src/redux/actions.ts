@@ -1340,6 +1340,9 @@ export function convertAndUpload(
         }
 
         await netmdService?.stop();
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
         dispatch(
             batchActions([
                 uploadDialogActions.setVisible(true),
@@ -1491,9 +1494,16 @@ export function convertAndUpload(
                         if ((f.file as any).getForEncoding) {
                             // It's an adaptive file
                             const file = f.file as AdaptiveFile;
-                            data = await file.getForEncoding(exportParams);
-                            convertNext();
-                            resolve({ file: f, data: data });
+                            try {
+                                data = await file.getForEncoding(exportParams, (object) => updateEncodeProgressCallback(j, files.length, object));
+                                totalBytesCalc += data.byteLength;
+                                convertNext();
+                                resolve({ file: f, data: data });
+                            } catch (err) {
+                                error = err;
+                                errorMessage = err instanceof Error ? `${f.title}: ${err.message}` : `${f.title}: Could not encode`;
+                                reject(err);
+                            }
                         } else {
                             const file = f.file as File;
                             try {
