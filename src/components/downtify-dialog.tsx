@@ -126,7 +126,7 @@ function toAdaptiveFile(track: DowntifyLibraryTrack): AdaptiveFile {
         album: track.album,
         artist: track.artist,
         duration: track.duration,
-        getForEncoding: (params, onProgress) => serviceRegistry.libraryService!.processLocalLibraryFile(track.file, params, onProgress),
+        getForEncoding: (params) => serviceRegistry.libraryService!.processLocalLibraryFile(track.file, params),
     };
 }
 

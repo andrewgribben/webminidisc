@@ -41,6 +41,7 @@ import { DowntifyBar } from './downtify-bar';
 import { actions as otherDialogActions } from '../redux/other-device-feature';
 import { actions as appActions } from '../redux/app-feature';
 import { initializeParameters } from '../custom-parameters';
+import { ManageEncodersDialog } from './manage-encoders-dialog';
 
 const useStyles = makeStyles()((theme) => ({
     main: {
@@ -226,7 +227,7 @@ export const Welcome = (props: {}) => {
                                 color="primary"
                                 boxClassName={classes.buttonBox}
                                 width={200}
-                                disabled={Services[lastSelectedService].requiresChrome && !runningChrome}
+                                disabled={doesServiceRequireChrome(availableServices[lastSelectedService]) && !runningChrome}
                                 selectedIndex={lastSelectedService}
                                 dropdownMapping={mapToEntry}
                                 loading={connectingInProgress}
@@ -319,6 +320,7 @@ export const Welcome = (props: {}) => {
                 )}
             </Box>
             <SettingsDialog />
+            <ManageEncodersDialog />
             <AboutDialog />
             <ChangelogDialog />
             <OtherDeviceDialog />

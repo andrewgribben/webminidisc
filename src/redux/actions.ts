@@ -5,6 +5,7 @@ import { actions as uploadDialogActions } from './upload-dialog-feature';
 import { actions as renameDialogActions } from './rename-dialog-feature';
 import { actions as errorDialogAction } from './error-dialog-feature';
 import { actions as recordDialogAction } from './record-dialog-feature';
+import { actions as encoderDownloadDialog } from './encoder-download-dialog-feature';
 import { actions as appStateActions } from './app-feature';
 import { actions as mainActions } from './main-feature';
 import { actions as convertDialogActions } from './convert-dialog-feature';
@@ -26,16 +27,19 @@ import {
     convertToWAV,
     ffmpegTranscode,
     AdaptiveFile,
+    getPublicPathFor,
+    loadPreference,
 } from '../utils';
 import NotificationCompleteIconUrl from '../images/record-complete-notification-icon.png';
 import { assertNumber, getHalfWidthTitleLength } from 'netmd-js/dist/utils';
 import { Capability, NetMDService, Disc, Codec, MinidiscSpec, ExploitCapability } from '../services/interfaces/netmd';
 import { getSimpleServices, ServiceConstructionInfo } from '../services/interface-service-manager';
-import { AudioServices } from '../services/audio-export-service-manager';
 import { checkFactoryCapability, initializeFactoryMode } from './factory/factory-actions';
-import { ExportParams } from '../services/audio/audio-export';
 import { LibraryServices } from '../services/library-services';
 import { s16LEToSamplesArray, Shazam } from 'shazam-api';
+import { AudioEncoderV1ExportParams, transferCodecToExportCodec } from '../services/audio/apiv1/external-interface';
+import { EncoderStorageManager } from '../services/audio/apiv1/dynamic-encoders';
+import { CustomParameters, isAllValid } from '../custom-parameters';
 
 export function control(action: 'play' | 'stop' | 'next' | 'prev' | 'goto' | 'pause' | 'seek', params?: unknown) {
     return async function (dispatch: AppDispatch, getState: () => RootState) {
@@ -99,6 +103,91 @@ export function control(action: 'play' | 'stop' | 'next' | 'prev' | 'goto' | 'pa
             console.log('control: Cannot get device status');
         }
     };
+}
+
+export function validateAndLoadEncoders(absoluteInit: boolean) {
+    return async function (dispatch: AppDispatch, getState: () => RootState) {
+        let audioExportServiceId: string | null;
+        let audioExportServiceConfig: CustomParameters;
+        if(absoluteInit) {
+            audioExportServiceId = loadPreference('audioExportServiceId', null);
+            audioExportServiceConfig = audioExportServiceId ? loadPreference('audioExportServiceConfig', {}) : {};
+            await EncoderStorageManager.INSTANCE.init();
+            type JSONEncoderInfo = {
+                id: string,
+                version: string,
+                path: string,
+                name: string,
+            }[];
+            try {
+                const result = await fetch(getPublicPathFor("encoders.json"));
+                if(result.status !== 200) {
+                    console.log(`Invalid status for encoders.json: ${result.status}: ${await result.text()}`);
+                    return;
+                }
+                const jsonData = await result.json() as JSONEncoderInfo;
+                const toInstall = [];
+                for(const encoder of jsonData) {
+                    if(EncoderStorageManager.INSTANCE.hasEncoder(encoder.id)) {
+                        if(EncoderStorageManager.INSTANCE.getEncoderMetadata(encoder.id).metadata.version === encoder.version) {
+                            continue;
+                        }
+                    }
+                    toInstall.push(encoder);
+                }
+
+                if(toInstall.length === 0) {
+                    console.log("All encoders are up to date with server provided copies.");
+                } else {
+                    console.log("Pulling encoders from server: ", toInstall);
+                    dispatch(encoderDownloadDialog.setVisible(true));
+                    for(let i = 0; i<toInstall.length; i++) {
+                        const entry = toInstall[i];
+                        dispatch(encoderDownloadDialog.setProgress({ currentEncoderIndex: i, totalEncoders: toInstall.length, currentEncoderName: entry.name }));
+                        console.log(`Downloading ${entry.id}...`);
+                        const rawSARFile = new Uint8Array(await (await fetch(getPublicPathFor(entry.path))).arrayBuffer());
+                        await EncoderStorageManager.INSTANCE.installEncoderSkipDependencyCheck(rawSARFile, true);
+                    }
+
+                    dispatch(encoderDownloadDialog.setVisible(false));
+                }
+            } catch(ex) {
+                console.log("While updating local encoder installs: ", ex);
+            }
+        } else {
+            audioExportServiceId = getState().appState.audioExportServiceId;
+            audioExportServiceConfig = getState().appState.audioExportServiceConfig;
+        }
+
+        if(audioExportServiceId) {
+            if(!EncoderStorageManager.INSTANCE.hasEncoder(audioExportServiceId) || !isAllValid(EncoderStorageManager.INSTANCE.getEncoderMetadata(audioExportServiceId).customParameters, audioExportServiceConfig)) {
+                audioExportServiceId = null;
+                audioExportServiceConfig = {};
+            }
+        }
+
+        if(!audioExportServiceId) {
+            const avail = EncoderStorageManager.INSTANCE.listAvailableEncodersMetadata();
+            let success = false;
+            for(const entry of avail) {
+                if(Object.keys(entry.customParameters ?? {}).length === 0) {
+                    audioExportServiceId = entry.encoderId;
+                    audioExportServiceConfig = {};
+                    success = true;
+                    break;
+                }
+            }
+            if(!success) {
+                console.log("No installed encoders, and no encoders provisioned by the server! The application is running without an encoder defined.");
+                return;
+            }
+        }
+
+        dispatch(batchActions([
+            appStateActions.setAudioExportServiceId(audioExportServiceId),
+            appStateActions.setAudioExportServiceConfig(audioExportServiceConfig),
+        ]));
+    }
 }
 
 export function renameGroup({ groupIndex, newName, newFullWidthName }: { groupIndex: number; newName: string; newFullWidthName?: string }) {
@@ -258,14 +347,11 @@ export function pair(serviceInstance: NetMDService, spec: MinidiscSpec) {
 
         serviceRegistry.mediaSessionService?.init(); // no need to await
 
-        const exportServiceIndex = Math.min(
-            Math.max(0, getState().appState.audioExportService),
-            AudioServices.length - 1
-        );
-        serviceRegistry.audioExportService = new AudioServices[exportServiceIndex].create(
-            getState().appState.audioExportServiceConfig
-        );
-        await serviceRegistry.audioExportService!.init();
+        if(getState().appState.audioExportServiceId)
+            serviceRegistry.audioExportService = EncoderStorageManager.INSTANCE.getEncoder(
+                getState().appState.audioExportServiceId!,
+                getState().appState.audioExportServiceConfig
+            ).instance;
 
         let libraryServiceIndex = getState().appState.libraryService;
         if (libraryServiceIndex !== -1) {
@@ -1374,14 +1460,19 @@ export function convertAndUpload(
         };
 
         // TODO: Make this less jank when there is more than one song being uploaded.
-        const updateEncodeProgressCallback = (trackNumber: number, totalTracks: number, object: { state: number; total: number }) => {
+        const updateEncodeProgressCallback = (
+            trackNumber: number,
+            totalTracks: number,
+            object: { stage: string; progress: number; total: number }
+        ) => {
             const now = new Date().getTime();
             if (now - lastConvertProgress > 200) {
                 queueMicrotask(() =>
                     dispatch(
                         uploadDialogActions.setTrackEncodingProgress({
+                            conversionStepName: audioExportService!.getUserFriendyStageName(object.stage),
                             total: totalTracks,
-                            state: trackNumber /* starts at 0 */ + object.state / object.total,
+                            state: trackNumber /* starts at 0 */ + object.progress / object.total,
                         })
                     )
                 );
@@ -1437,16 +1528,14 @@ export function convertAndUpload(
             titleCurrent: '',
             titleConverting: '',
         };
-        const updateTrack = () => {
-            dispatch(
-                batchActions([
-                    uploadDialogActions.setTrackProgress(trackUpdate),
-                    uploadDialogActions.setTrackEncodingProgress({ state: 0, total: 0 }),
-                ])
-            );
+        const overallTrackStatsChanged = () => {
+            dispatch(uploadDialogActions.setOverallUploadProgress(trackUpdate));
             updateTitle();
         };
-        updateTrack();
+        overallTrackStatsChanged();
+        dispatch(uploadDialogActions.setTrackEncodingProgress({ conversionStepName: null, state: 0, total: 0 }));
+
+        await audioExportService!.init();
 
         const conversionIterator = async function* (files: TitledFile[]) {
             const converted: Promise<{ file: TitledFile; data: ArrayBuffer }>[] = [];
@@ -1457,7 +1546,8 @@ export function convertAndUpload(
                     trackUpdate.converting = i;
                     trackUpdate.titleConverting = ``;
                     totalBytesAllTracks = totalBytesCalc;
-                    updateTrack();
+                    overallTrackStatsChanged();
+                    dispatch(uploadDialogActions.setTrackEncodingProgress({ conversionStepName: null, state: 0, total: 0 }));
                     return;
                 }
 
@@ -1465,30 +1555,15 @@ export function convertAndUpload(
                 trackUpdate.converting = i;
                 trackUpdate.titleConverting = f.title;
                 const j = i;
-                updateTrack();
+                overallTrackStatsChanged();
                 i++;
 
                 if (f.forcedEncoding === null) {
                     // This is not an ATRAC file
                     converted[j] = new Promise(async (resolve, reject) => {
-                        let audioExportFormat: ExportParams['format'];
-                        switch (format.codec) {
-                            case 'SPS':
-                            case 'SPM':
-                                audioExportFormat = {
-                                    codec: 'PCM',
-                                    bitrate: 1411,
-                                };
-                                break;
-                            default:
-                                audioExportFormat = {
-                                    codec: format.codec,
-                                    bitrate: format.bitrate,
-                                };
-                                break;
-                        }
+                        let audioExportFormat = transferCodecToExportCodec(format);
 
-                        const exportParams: ExportParams = {
+                        const exportParams: AudioEncoderV1ExportParams = {
                             format: audioExportFormat,
                             enableReplayGain: additionalParameters.enableReplayGain,
                             writeGapless: additionalParameters.enableGapless && j !== files.length - 1,
@@ -1499,7 +1574,7 @@ export function convertAndUpload(
                             // It's an adaptive file
                             const file = f.file as AdaptiveFile;
                             try {
-                                data = await file.getForEncoding(exportParams, (object) => updateEncodeProgressCallback(j, files.length, object));
+                                data = await file.getForEncoding(exportParams);
                                 totalBytesCalc += data.byteLength;
                                 convertNext();
                                 resolve({ file: f, data: data });
@@ -1511,12 +1586,14 @@ export function convertAndUpload(
                         } else {
                             const file = f.file as File;
                             try {
-                                await audioExportService!.prepare(file);
-
-                                data = await audioExportService!.export(
-                                    exportParams,
-                                    updateEncodeProgressCallback.bind(null, j, files.length)
-                                );
+                                data = (
+                                    await audioExportService!.transcode(
+                                        new Uint8Array(await file.arrayBuffer()),
+                                        file.name,
+                                        exportParams,
+                                        updateEncodeProgressCallback.bind(null, j, files.length)
+                                    )
+                                ).buffer;
                                 totalBytesCalc += data.byteLength;
                                 convertNext();
                                 resolve({ file: f, data: data });
@@ -1594,7 +1671,7 @@ export function convertAndUpload(
             }
             bytesSentFromPrevTracks += bytesSentFromThisTrack;
             bytesSentFromThisTrack = 0;
-            updateTrack();
+            overallTrackStatsChanged();
             updateUploadProgressCallback({ written: 0, encrypted: 0, total: 100 });
             if (file.forcedEncoding?.codec === 'SPS' || file.forcedEncoding?.codec === 'SPM') {
                 // Uploading an AEA file.
@@ -1624,6 +1701,7 @@ export function convertAndUpload(
             }
         }
         await netmdService?.finalizeUpload();
+        await audioExportService!.deinit();
 
         if (format.codec === 'SPM' && !deviceCapabilities.includes(Capability.nativeMonoUpload)) {
             netmdFactoryService!.enableMonoUpload(false);

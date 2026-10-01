@@ -1,5 +1,5 @@
 import { CustomParameters } from '../../custom-parameters';
-import { ExportParams } from '../audio/audio-export';
+import { AudioEncoderV1ExportParams } from '../audio/apiv1/external-interface';
 import serviceRegistry from '../registry';
 import { LibraryService, LocalDatabase } from './library';
 
@@ -403,11 +403,7 @@ export class DowntifyLibraryService implements LibraryService {
         return tree as LocalDatabase;
     }
 
-    async processLocalLibraryFile(
-        filePath: string,
-        params: ExportParams,
-        onProgress?: (progress: { state: number; total: number }) => void
-    ): Promise<ArrayBuffer> {
+    async processLocalLibraryFile(filePath: string, params: AudioEncoderV1ExportParams): Promise<ArrayBuffer> {
         const exporter = serviceRegistry.audioExportService;
         if (!exporter) {
             throw new Error('No audio encoder is configured');
@@ -416,16 +412,12 @@ export class DowntifyLibraryService implements LibraryService {
         if (!response.ok) {
             throw new Error(await readError(response));
         }
-        const blob = await readResponseBlob(response, (loaded, total) => {
-            onProgress?.({ state: Math.round((loaded / total) * 200), total: 1000 });
-        });
+        const blob = await readResponseBlob(response);
         const name = filePath.split('/').pop() || 'audio.bin';
-        const file = new File([blob], name);
-        await exporter.prepare(file);
-        return exporter.export(params, (progress) => {
-            const ratio = progress.total > 0 ? progress.state / progress.total : 0;
-            onProgress?.({ state: 200 + Math.round(Math.min(1, ratio) * 800), total: 1000 });
-        });
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        // Upload flow already calls init(); calling again is safe for standalone use.
+        await exporter.init();
+        return (await exporter.transcode(bytes, name, params)).buffer;
     }
 
     async resolveUrl(url: string): Promise<DowntifyResolvedUrl> {

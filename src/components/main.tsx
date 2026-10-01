@@ -89,6 +89,7 @@ import { actions as discLibraryActions } from '../redux/disc-library-feature';
 import { loadKnownDisc, saveDiscAudio } from '../redux/disc-library-actions';
 import { Menu, MenuItem } from '@mui/material';
 import serviceRegistry from '../services/registry';
+import { ManageEncodersDialog } from './manage-encoders-dialog';
 
 // TODO jss-to-tss-react codemod: Unable to handle style definition reliably. Unsupported arrow function syntax.
 //Unexpected value type of ConditionalExpression.
@@ -950,6 +951,7 @@ export const Main = (props: {}) => {
             <AboutDialog />
             <ChangelogDialog />
             <SettingsDialog />
+            <ManageEncodersDialog />
             <LocalLibraryDialog setUploadedFiles={setUploadedFiles} />
             <PanicDialog />
             <ContextMenu onTogglePlayPause={handleTogglePlayPauseTrack} onRename={handleRenameTrack} onDelete={handleDeleteTrack} />

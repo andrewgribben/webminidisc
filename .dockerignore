@@ -1,6 +1,9 @@
 node_modules
 dist
 build
-extra
+# Encoder packaging needs extra/sar-packager; skip heavy optional ATRAC source trees.
+extra/atrac3os
+extra/atrac3vm
+extra/at3re-harness
 npm-debug.log*
 .DS_Store

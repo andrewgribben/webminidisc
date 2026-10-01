@@ -21,12 +21,12 @@ import TableRow from '@mui/material/TableRow';
 import { AdaptiveFile, formatTimeFromSeconds } from '../utils';
 import { makeStyles } from 'tss-react/mui';
 import serviceRegistry from '../services/registry';
-import { ExportParams } from '../services/audio/audio-export';
 import { DowntifyLibraryService } from '../services/library/downtify-library';
 import { LocalDatabase } from '../services/library/library';
 import { File, FileBrowser } from './file-browser/browser';
 import { Add, ArrowUpward } from '@mui/icons-material';
 import { dirSorter, FileType } from './file-browser/utils';
+import { AudioEncoderV1ExportParams } from '../services/audio/apiv1/external-interface';
 
 const Transition = React.forwardRef(function Transition(props: SlideProps, ref: React.Ref<unknown>) {
     return <Slide direction="up" ref={ref} {...props} />;
@@ -198,8 +198,8 @@ export const LocalLibraryDialog = ({ setUploadedFiles }: { setUploadedFiles: (fi
                 name: pathTokens[pathTokens.length - 1] || 'unknown.unk',
                 duration: file.duration,
 
-                getForEncoding: async (params: ExportParams, onProgress?: (progress: { state: number; total: number }) => void) => {
-                    return serviceRegistry.libraryService!.processLocalLibraryFile(file.path, params, onProgress);
+                getForEncoding: async (params: AudioEncoderV1ExportParams) => {
+                    return serviceRegistry.libraryService!.processLocalLibraryFile(file.path, params);
                 },
             };
             return adaptiveFile;
