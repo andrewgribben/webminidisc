@@ -1,0 +1,8 @@
+This Web MiniDisc image runs a MiniDisc metadata service as a separate program.
+Web MiniDisc talks to it over HTTP on 127.0.0.1:8001. The browser uses /md-library/.
+
+Source adapted from:
+https://github.com/chrishuangcf/minidisc-library
+(backend FastAPI app: discs, audio, MusicBrainz enrich, local match)
+
+UPnP/SSDP device discovery is not started in this embedded copy.

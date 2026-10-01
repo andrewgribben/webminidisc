@@ -3,7 +3,7 @@ set -eu
 
 UPSTREAM="${DOWNTIFY_UPSTREAM:-http://127.0.0.1:8000}"
 UPSTREAM="${UPSTREAM%/}"
-MD_UPSTREAM="${MD_LIBRARY_UPSTREAM:-http://192.168.5.3:8475}"
+MD_UPSTREAM="${MD_LIBRARY_UPSTREAM:-http://127.0.0.1:8001}"
 MD_UPSTREAM="${MD_UPSTREAM%/}"
 # Escape sed replacement metacharacters so the upstream URLs are inserted literally.
 ESCAPED_UPSTREAM=$(printf '%s' "$UPSTREAM" | sed -e 's/[\\&#]/\\&/g')
@@ -23,9 +23,17 @@ if [ ! -f "$CERT_DIR/cert.pem" ] || [ ! -f "$CERT_DIR/key.pem" ]; then
         -addext "subjectAltName=DNS:webminidisc,DNS:localhost,IP:127.0.0.1"
 fi
 
+mkdir -p /md-library-data/audio
+
 # The embedded Downtify is a separate process. It is not published on the host.
 cd /downtify
 python main.py web --host 127.0.0.1 --port 8000 --log-level "${DOWNTIFY_LOG_LEVEL:-info}" &
+
+# MiniDisc metadata API (MusicBrainz match, saved discs, WAV storage).
+cd /md-library
+DATABASE_URL="${DATABASE_URL:-sqlite:////md-library-data/minidisc.db}" \
+AUDIO_DIR="${AUDIO_DIR:-/md-library-data/audio}" \
+/md-library/.venv/bin/python -m uvicorn app.main:api --host 127.0.0.1 --port 8001 &
 
 python - <<'PY'
 import json
@@ -35,27 +43,29 @@ import time
 import urllib.error
 import urllib.request
 
-base = "http://127.0.0.1:8000"
-deadline = time.time() + 90
-last_error = "not started"
-while time.time() < deadline:
-    try:
-        with urllib.request.urlopen(base + "/api/version", timeout=2) as response:
-            response.read()
-        break
-    except Exception as exc:
-        last_error = str(exc)
-        time.sleep(0.5)
-else:
-    sys.stderr.write(f"embedded downtify did not become ready: {last_error}\n")
+def wait_for(url: str, label: str, timeout: float = 90.0) -> None:
+    deadline = time.time() + timeout
+    last_error = "not started"
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                response.read()
+            return
+        except Exception as exc:
+            last_error = str(exc)
+            time.sleep(0.5)
+    sys.stderr.write(f"{label} did not become ready: {last_error}\n")
     sys.exit(1)
+
+wait_for("http://127.0.0.1:8000/api/version", "embedded downtify")
+wait_for("http://127.0.0.1:8001/healthz", "embedded md-library")
 
 marker = "/data/.wmd-format-initialized"
 if os.path.exists(marker):
     sys.exit(0)
 
 request = urllib.request.Request(
-    base + "/api/settings/update",
+    "http://127.0.0.1:8000/api/settings/update",
     data=json.dumps({"format": "flac"}).encode(),
     headers={"Content-Type": "application/json"},
     method="POST",

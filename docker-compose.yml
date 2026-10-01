@@ -7,8 +7,11 @@ services:
       - "8474:8474"
     environment:
       DOWNTIFY_UPSTREAM: http://127.0.0.1:8000
-      MD_LIBRARY_UPSTREAM: http://192.168.5.3:8475
+      MD_LIBRARY_UPSTREAM: http://127.0.0.1:8001
+      DATABASE_URL: sqlite:////md-library-data/minidisc.db
+      AUDIO_DIR: /md-library-data/audio
     volumes:
       - /mnt/user/media/Music:/downloads
       - /mnt/user/appdata/webminidisc-downtify:/data
+      - /mnt/user/appdata/webminidisc-library:/md-library-data
     restart: unless-stopped
