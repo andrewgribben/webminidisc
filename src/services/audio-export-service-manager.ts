@@ -1,5 +1,5 @@
 import { CustomParameterInfo, CustomParameters } from '../custom-parameters';
-import { ATRACOS_INCLUDED } from '../version-info';
+import { ATRACOS_INCLUDED, AT3RE_INCLUDED } from '../version-info';
 import { Atrac3OSExportService } from './audio/atrac3os-export';
 import { Atrac3REExportService } from './audio/atrac3re-export';
 import { AtracdencAudioExportService } from './audio/atracdenc-export';
@@ -14,40 +14,45 @@ interface AudioServicePrototype<T extends AudioExportService> {
     description?: string;
 }
 
-export const AudioServices: AudioServicePrototype<AudioExportService>[] = [
-    {
-        name: 'At3RE',
-        create: Atrac3REExportService,
-        description: 'Reverse engineered at3tool encoder. Client-side only, has full ATRAC3/3+ support.',
-    },
-    {
-        name: 'Atracdenc',
-        create: AtracdencAudioExportService,
-        description: 'The standard open-source ATRAC encoder. Its ATRAC3 support is incomplete',
-    },
-    {
-        name: 'Remote ATRAC Encoder',
-        create: RemoteAtracExportService,
-        customParameters: [
-            {
-                userFriendlyName: 'Server Address',
-                varName: 'address',
-                type: 'string',
-                defaultValue: 'https://atrac.minidisc.wiki/',
-                validator: (content) => {
-                    try {
-                        new URL(content);
-                        return true;
-                    } catch (e) {
-                        return false;
-                    }
-                },
+const at3reService: AudioServicePrototype<AudioExportService> = {
+    name: 'At3RE',
+    create: Atrac3REExportService,
+    description: 'Reverse engineered at3tool encoder. Client-side only, has full ATRAC3/3+ support.',
+};
+
+const atracdencService: AudioServicePrototype<AudioExportService> = {
+    name: 'Atracdenc',
+    create: AtracdencAudioExportService,
+    description: 'The standard open-source ATRAC encoder. Its ATRAC3 support is incomplete',
+};
+
+const remoteAtracService: AudioServicePrototype<AudioExportService> = {
+    name: 'Remote ATRAC Encoder',
+    create: RemoteAtracExportService,
+    customParameters: [
+        {
+            userFriendlyName: 'Server Address',
+            varName: 'address',
+            type: 'string',
+            defaultValue: 'https://atrac.minidisc.wiki/',
+            validator: (content) => {
+                try {
+                    new URL(content);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
             },
-        ],
-        description:
-            'A separate high-quality ATRAC encoder hosted on another server (as defined by https://github.com/thinkbrown/atrac-api)',
-    },
-];
+        },
+    ],
+    description: 'A separate high-quality ATRAC encoder hosted on another server (as defined by https://github.com/thinkbrown/atrac-api)',
+};
+
+// At3RE needs private WASM (public/at3re-harness.js) that is not in the public tree.
+// Without it, default to Atracdenc so convert/upload works on self-hosted builds.
+export const AudioServices: AudioServicePrototype<AudioExportService>[] = AT3RE_INCLUDED
+    ? [at3reService, atracdencService, remoteAtracService]
+    : [atracdencService, remoteAtracService];
 
 if (ATRACOS_INCLUDED) {
     AudioServices.push({

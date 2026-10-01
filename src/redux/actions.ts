@@ -258,7 +258,11 @@ export function pair(serviceInstance: NetMDService, spec: MinidiscSpec) {
 
         serviceRegistry.mediaSessionService?.init(); // no need to await
 
-        serviceRegistry.audioExportService = new AudioServices[getState().appState.audioExportService].create(
+        const exportServiceIndex = Math.min(
+            Math.max(0, getState().appState.audioExportService),
+            AudioServices.length - 1
+        );
+        serviceRegistry.audioExportService = new AudioServices[exportServiceIndex].create(
             getState().appState.audioExportServiceConfig
         );
         await serviceRegistry.audioExportService!.init();
