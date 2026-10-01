@@ -63,9 +63,14 @@ export function MatchAlbumDialog({ open, onClose }: { open: boolean; onClose: ()
     }, [open]);
 
     const choose = (match: AlbumMatch) => {
+        const currentDisc = discRef.current;
+        if (!currentDisc) {
+            setError('Connect a disc before matching an album.');
+            return;
+        }
         setError('');
         setLoading(true);
-        releaseDetails(match.release_mbid)
+        releaseDetails(match.release_mbid, currentDisc)
             .then((release) => {
                 setDetails(release);
             })
@@ -117,11 +122,12 @@ export function MatchAlbumDialog({ open, onClose }: { open: boolean; onClose: ()
                         <Typography variant="body2" color="textSecondary">
                             {details.artist_credit}
                             {details.date ? ` · ${details.date}` : ''}
+                            {details.medium_title ? ` · ${details.medium_title}` : ''}
                         </Typography>
                         <List dense>
                             {details.tracks.map((track, index) => (
-                                <Typography key={`${track.position}-${index}`} variant="body2">
-                                    {index + 1}. {track.title}
+                                <Typography key={`${track.number ?? track.position}-${index}`} variant="body2">
+                                    {track.number ?? index + 1}. {track.title}
                                 </Typography>
                             ))}
                         </List>

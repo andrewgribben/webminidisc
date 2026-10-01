@@ -35,6 +35,7 @@ export interface AlbumMatch {
 
 export interface ReleaseTrack {
     position: number;
+    number?: number | null;
     title: string;
     duration_ms: number | null;
 }
@@ -45,6 +46,8 @@ export interface ReleaseDetails {
     artist_credit: string | null;
     date: string | null;
     cover_url: string | null;
+    medium_position?: number | null;
+    medium_title?: string | null;
     tracks: ReleaseTrack[];
 }
 
@@ -178,8 +181,15 @@ export async function matchAlbum(disc: Disc): Promise<AlbumMatch[]> {
     return result.matches;
 }
 
-export function releaseDetails(mbid: string): Promise<ReleaseDetails> {
-    return sendJson<ReleaseDetails>(`/api/enrich/release/${encodeURIComponent(mbid)}`, 'GET');
+export function releaseDetails(mbid: string, disc: Disc): Promise<ReleaseDetails> {
+    const tracks = getTracks(disc);
+    return sendJson<ReleaseDetails>(`/api/enrich/release/${encodeURIComponent(mbid)}`, 'POST', {
+        tracks: tracks.map((track) => ({
+            index_no: track.index,
+            raw_title: trackTitle(track),
+            duration_ms: Math.round(track.duration * 1000),
+        })),
+    });
 }
 
 export async function saveDisc(body: DiscCreateBody): Promise<SavedDisc> {
