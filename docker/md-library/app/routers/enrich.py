@@ -1,9 +1,35 @@
+import re
+
 from fastapi import APIRouter, HTTPException
 from rapidfuzz import fuzz
 from ..services import musicbrainz as mb, coverart
 from ..schemas import DiscFingerprint, MatchResponse, ReleaseAlignRequest, ReleaseDetailsResponse
 
 router = APIRouter(prefix="/api/enrich", tags=["enrich"])
+
+# Right-hand sides that are album subtitles, not "Album - Artist" credits.
+_SUBTITLE_RHS = re.compile(
+    r"^(the\s+)?"
+    r"(musical|soundtrack|score|cast(\s+recording)?|original\s+.+\s+cast|"
+    r"live(\s+at\b.*)?|deluxe(\s+edition)?|remaster(ed)?|"
+    r"expanded(\s+edition)?|anniversary(\s+edition)?|edition|ep|single)\s*$",
+    re.I,
+)
+
+
+def looks_like_album_artist_split(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    return _SUBTITLE_RHS.match(right) is None
+
+
+def recording_title_hint(raw_title: str | None) -> str:
+    """Prefer the song name when NetMD titles are stored as 'Artist - Title'."""
+    title = (raw_title or "").strip()
+    if " - " not in title:
+        return title
+    _, right = title.rsplit(" - ", 1)
+    return right.strip() or title
 
 
 def normalize_duration_ms(duration_ms: int) -> int:
@@ -128,14 +154,13 @@ def score_release(release: dict, fp: DiscFingerprint, track_count: int | None) -
         if reported:
             score += max(0, 80 - abs(reported - track_count) * 8)
     if fp.disc_title and release.get("title"):
-        # Compare only the album side of "Thriller - Michael Jackson".
-        album_only = fp.disc_title.split(" - ", 1)[0].strip() or fp.disc_title
-        score += fuzz.token_set_ratio(album_only, release["title"])
+        # Keep the full disc title so "Back to the Future - The Musical" can match.
+        score += fuzz.token_set_ratio(fp.disc_title, release["title"])
     if fp.artist_hint and release.get("artist-credit"):
         score += fuzz.token_set_ratio(fp.artist_hint, artist_credit(release)) * 0.5
     elif fp.disc_title and " - " in fp.disc_title and release.get("artist-credit"):
-        maybe_artist = fp.disc_title.split(" - ", 1)[1].strip()
-        if maybe_artist:
+        left, maybe_artist = [part.strip() for part in fp.disc_title.split(" - ", 1)]
+        if looks_like_album_artist_split(left, maybe_artist):
             score += fuzz.token_set_ratio(maybe_artist, artist_credit(release)) * 0.5
     score += float(release.get("score") or 0) / 100.0
     return score
@@ -146,8 +171,8 @@ def infer_artist_hint(fp: DiscFingerprint) -> str | None:
         return fp.artist_hint.strip()
     if fp.disc_title and " - " in fp.disc_title:
         left, right = [part.strip() for part in fp.disc_title.split(" - ", 1)]
-        # Prefer the side that is not the release title when titles look like "Album - Artist".
-        if left and right:
+        # Only treat "Album - Artist" when the right side is not a subtitle like "The Musical".
+        if looks_like_album_artist_split(left, right):
             return right
     return None
 
@@ -182,9 +207,11 @@ async def match_meta(fp: DiscFingerprint):
 
     track_count = len(fp.tracks) if fp.tracks else None
     artist_hint = infer_artist_hint(fp)
-    album_hint = fp.disc_title.split(" - ", 1)[0].strip() if fp.disc_title and " - " in fp.disc_title else fp.disc_title
+    # Search the full disc title. Splitting on " - " breaks titles like
+    # "Back to the Future - The Musical" into a fake artist "The Musical".
+    album_hint = fp.disc_title
     durations_ms = [normalize_duration_ms(t["duration_ms"]) for t in fp.tracks] if fp.tracks else None
-    track_titles = [t.get("raw_title") or "" for t in fp.tracks] if fp.tracks else None
+    track_titles = [recording_title_hint(t.get("raw_title")) for t in fp.tracks] if fp.tracks else None
 
     print(f"[ENRICH] Searching MusicBrainz - artist: {artist_hint}, album: {album_hint}, track_count: {track_count}")
     rels = await mb.search_release_by_tracks(artist_hint, album_hint, track_count, durations_ms, track_titles)

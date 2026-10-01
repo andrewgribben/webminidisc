@@ -42,15 +42,49 @@ def _query(artist: str | None, album: str | None, track_count: int | None) -> st
     return " AND ".join(terms) if terms else "*:*"
 
 
+_SUBTITLE_RHS = (
+    "musical",
+    "soundtrack",
+    "score",
+    "cast",
+    "cast recording",
+    "live",
+    "deluxe",
+    "deluxe edition",
+    "remaster",
+    "remastered",
+    "expanded",
+    "expanded edition",
+    "anniversary",
+    "anniversary edition",
+    "edition",
+    "ep",
+    "single",
+)
+
+
+def _rhs_looks_like_artist(right: str) -> bool:
+    normalized = right.strip().lower()
+    if normalized.startswith("the "):
+        normalized = normalized[4:]
+    if normalized in _SUBTITLE_RHS:
+        return False
+    if normalized.startswith("original ") and "cast" in normalized:
+        return False
+    if normalized.startswith("live "):
+        return False
+    return True
+
+
 def _title_parts(album: str | None) -> list[tuple[str | None, str | None]]:
-    """Try album alone, then Album - Artist and Artist - Album when a dash is present."""
+    """Try album alone, then Album - Artist when the right side looks like an artist."""
     if not album:
         return [(None, None)]
     variants: list[tuple[str | None, str | None]] = [(None, album)]
     if " - " not in album:
         return variants
     left, right = [part.strip() for part in album.split(" - ", 1)]
-    if left and right:
+    if left and right and _rhs_looks_like_artist(right):
         variants.append((right, left))  # Album - Artist
         variants.append((left, right))  # Artist - Album
     return variants
@@ -116,8 +150,14 @@ async def search_release_by_tracks(
     for parsed_artist, parsed_album in _title_parts(album):
         await try_collect(artist or parsed_artist, parsed_album or album, track_count)
 
+    # Track-count filters miss alternate pressings; retry without them, then without artist.
     if not releases and track_count:
-        await try_collect(artist, album, track_count)
+        for parsed_artist, parsed_album in _title_parts(album):
+            await try_collect(artist or parsed_artist, parsed_album or album, None)
+    if not releases and artist:
+        for parsed_artist, parsed_album in _title_parts(album):
+            await try_collect(None, parsed_album or album, track_count)
+            await try_collect(None, parsed_album or album, None)
     return {"releases": releases}
 
 
