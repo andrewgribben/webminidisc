@@ -1,0 +1,54 @@
+name: "Chore"
+description: "Define maintenance work with a bounded outcome."
+title: "[Chore] "
+labels: ["planning", "type:chore"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        New issues enter planning, never the ready queue. During discovery,
+        application implementation, scaffolding, and executable prototypes are prohibited.
+        Only the named human owner may authorise implementation against an exact
+        planning revision and a defined issue scope. This form is not approval.
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Maintenance need"
+      description: "What needs to change and why?"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Scope and boundaries"
+      description: "Define the permitted change and exclusions."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Completion criteria"
+      description: "What observable evidence will show this is complete?"
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: "Verification plan and dependencies"
+      description: "Name relevant checks and prerequisites."
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: "Specification, epic, and decision links"
+      description: "Link durable context accessible to local and remote agents. Note unresolved questions."
+    validations:
+      required: false
+  - type: textarea
+    id: approval
+    attributes:
+      label: "Phase approval reference"
+      description: "For later implementation, link the owner decision and phase approval covering this issue, including the exact approved planning SHA. Leave blank while planning."
+    validations:
+      required: false

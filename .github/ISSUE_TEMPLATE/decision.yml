@@ -1,0 +1,54 @@
+name: "Decision"
+description: "Prepare a tradeoff for the human owner to decide."
+title: "[Decision] "
+labels: ["planning", "type:decision"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        New issues enter planning, never the ready queue. During discovery,
+        application implementation, scaffolding, and executable prototypes are prohibited.
+        Only the named human owner may authorise implementation against an exact
+        planning revision and a defined issue scope. This form is not approval.
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Decision needed"
+      description: "What choice is needed and why now?"
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: "Options and decision criteria"
+      description: "Describe feasible options, evidence, and relevant tradeoffs."
+    validations:
+      required: true
+  - type: textarea
+    id: decider
+    attributes:
+      label: "Human decider and affected work"
+      description: "Name the owner and which stories or specifications depend on this decision."
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: "Recommendation"
+      description: "Agents may recommend; record final owner approval separately with its reference."
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: "Specification, epic, and decision links"
+      description: "Link durable context accessible to local and remote agents. Note unresolved questions."
+    validations:
+      required: false
+  - type: textarea
+    id: approval
+    attributes:
+      label: "Phase approval reference"
+      description: "For later implementation, link the owner decision and phase approval covering this issue, including the exact approved planning SHA. Leave blank while planning."
+    validations:
+      required: false

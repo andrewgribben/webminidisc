@@ -1,0 +1,4 @@
+[agents]
+# Three specialist children plus the coordinator: four total.
+max_concurrent_threads_per_session = 3
+# One delegation level is enforced by role instructions, not a claimed runtime setting.

@@ -1,0 +1,54 @@
+name: "Story"
+description: "Define a small observable outcome for later implementation."
+title: "[Story] "
+labels: ["planning", "type:story"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        New issues enter planning, never the ready queue. During discovery,
+        application implementation, scaffolding, and executable prototypes are prohibited.
+        Only the named human owner may authorise implementation against an exact
+        planning revision and a defined issue scope. This form is not approval.
+  - type: textarea
+    id: problem
+    attributes:
+      label: "User story"
+      description: "As a … I want … so that …; include concrete behaviour."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance criteria"
+      description: "List observable, checkable conditions."
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: "Boundaries and dependencies"
+      description: "State exclusions and blocking dependencies; write None if absent."
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: "Verification plan"
+      description: "How should an agent demonstrate the criteria and what needs owner review?"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: "Specification, epic, and decision links"
+      description: "Link durable context accessible to local and remote agents. Note unresolved questions. For scope approval, link the committed scope snapshot; issue edits do not change approved scope."
+    validations:
+      required: false
+  - type: textarea
+    id: approval
+    attributes:
+      label: "Phase approval reference"
+      description: "For later implementation, link the owner decision and phase approval covering this issue, including the exact approved planning SHA. Leave blank while planning."
+    validations:
+      required: false

@@ -1,0 +1,54 @@
+name: "Workflow improvement"
+description: "Improve the shared process using project evidence."
+title: "[Workflow improvement] "
+labels: ["planning", "type:workflow-improvement"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        New issues enter planning, never the ready queue. During discovery,
+        application implementation, scaffolding, and executable prototypes are prohibited.
+        Only the named human owner may authorise implementation against an exact
+        planning revision and a defined issue scope. This form is not approval.
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Observed problem"
+      description: "Describe a concrete incident and its effect."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "Evidence and affected workflow version"
+      description: "Link examples and name the version used."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Proposed improvement and boundaries"
+      description: "Define the intended change, affected rules, and what stays outside this issue."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance and trial plan"
+      description: "How will we assess the improvement and avoid silently changing active project rules?"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: "Specification, epic, and decision links"
+      description: "Link durable context accessible to local and remote agents. Note unresolved questions."
+    validations:
+      required: false
+  - type: textarea
+    id: approval
+    attributes:
+      label: "Phase approval reference"
+      description: "For later implementation, link the owner decision and phase approval covering this issue, including the exact approved planning SHA. Leave blank while planning."
+    validations:
+      required: false

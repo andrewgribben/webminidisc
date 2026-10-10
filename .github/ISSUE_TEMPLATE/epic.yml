@@ -1,0 +1,54 @@
+name: "Epic"
+description: "Define a capability and group its delivery stories."
+title: "[Epic] "
+labels: ["planning", "type:epic"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        New issues enter planning, never the ready queue. During discovery,
+        application implementation, scaffolding, and executable prototypes are prohibited.
+        Only the named human owner may authorise implementation against an exact
+        planning revision and a defined issue scope. This form is not approval.
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Capability and audience"
+      description: "Describe the user need and intended outcome."
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: "Success criteria"
+      description: "How will the owner judge the capability complete?"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Scope and exclusions"
+      description: "Define boundaries and the intended first slice."
+    validations:
+      required: true
+  - type: textarea
+    id: stories
+    attributes:
+      label: "Child stories and dependencies"
+      description: "Link existing stories or list stories to draft."
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: "Specification, epic, and decision links"
+      description: "Link durable context accessible to local and remote agents. Note unresolved questions."
+    validations:
+      required: false
+  - type: textarea
+    id: approval
+    attributes:
+      label: "Phase approval reference"
+      description: "For later implementation, link the owner decision and phase approval covering this issue, including the exact approved planning SHA. Leave blank while planning."
+    validations:
+      required: false

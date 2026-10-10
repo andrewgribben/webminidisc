@@ -106,3 +106,7 @@ Web MiniDisc Pro and its predecessors are GPL licensed. You are free to fork or 
 - [material-ui](https://material-ui.com/) *to build the user interface.*
 - [linux-minidisc](https://github.com/linux-minidisc/linux-minidisc) *to build the netmd-js library.*
 - [netmd-exploits](https://github.com/asivery/netmd-exploits/) *For factory mode commands and track dumping*
+
+## Planning this fork
+
+New feature planning uses the adopted [project-discovery workflow](docs/workflow-adoption.md). Start with the [task prompt guide](docs/task-prompts.md), [project brief](docs/brief.md) and [agent agreement](AGENTS.md). Product scope and development authorisation are separate and currently pending. Existing upstream documentation above remains applicable to the application.

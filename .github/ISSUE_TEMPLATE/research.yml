@@ -1,0 +1,54 @@
+name: "Research"
+description: "Resolve uncertainty using bounded research."
+title: "[Research] "
+labels: ["planning", "type:research"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        New issues enter planning, never the ready queue. During discovery,
+        application implementation, scaffolding, and executable prototypes are prohibited.
+        Only the named human owner may authorise implementation against an exact
+        planning revision and a defined issue scope. This form is not approval.
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Question"
+      description: "What uncertainty needs resolving, and what decision will the answer inform?"
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: "Research approach and limits"
+      description: "Describe evidence sources, time/cost bounds, and permitted read-only exploration. No application implementation or executable prototypes during discovery."
+    validations:
+      required: true
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: "Required evidence and completion criteria"
+      description: "Define the written findings/options and what constitutes an adequate answer."
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: "Related decisions and dependencies"
+      description: "Link relevant issues or specifications."
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: "Specification, epic, and decision links"
+      description: "Link durable context accessible to local and remote agents. Note unresolved questions."
+    validations:
+      required: false
+  - type: textarea
+    id: approval
+    attributes:
+      label: "Phase approval reference"
+      description: "For later implementation, link the owner decision and phase approval covering this issue, including the exact approved planning SHA. Leave blank while planning."
+    validations:
+      required: false
