@@ -227,41 +227,27 @@ function drawTypographicEdge(
     );
 }
 
-function drawAlbumOverlayText(
+/** Track listing over album art on the cartridge face (readable white text on a light scrim). */
+function drawAlbumFaceTracklist(
     page: PDFPage,
     font: PDFFont,
     fontBold: PDFFont,
     disc: LabelDiscInfo,
-    box: { x: number; y: number; width: number; height: number },
-    opts: { showTracks: boolean }
+    box: { x: number; y: number; width: number; height: number }
 ) {
     const ink = rgb(1, 1, 1);
-    const pad = 2.5 * PT_PER_MM;
-    let cursorY = box.y + box.height - pad - 8;
-    const titleSize = Math.min(11, box.width / 8);
+    const pad = 2.2 * PT_PER_MM;
+    // Soft full-panel scrim so track text stays readable on any cover.
+    page.drawRectangle({ ...box, color: rgb(0, 0, 0), opacity: 0.4 });
+
+    let cursorY = box.y + box.height - pad - 7;
+    const titleSize = Math.min(9, box.width / 8);
     const title = truncateToWidth(fontBold, disc.title || 'Untitled Disc', titleSize, box.width - pad * 2);
     page.drawText(title, { x: box.x + pad, y: cursorY, size: titleSize, font: fontBold, color: ink });
-    cursorY -= titleSize + 2;
-    if (disc.artist) {
-        const artistSize = Math.min(8, titleSize * 0.75);
-        const artist = truncateToWidth(font, disc.artist, artistSize, box.width - pad * 2);
-        page.drawText(artist, { x: box.x + pad, y: cursorY, size: artistSize, font, color: ink });
-        cursorY -= artistSize + 3;
-    }
-    const total = formatTimeFromSeconds(disc.totalDurationSec, false);
-    page.drawText(`${disc.tracks.length} tracks · ${total}`, {
-        x: box.x + pad,
-        y: cursorY,
-        size: 7,
-        font,
-        color: ink,
-    });
-    cursorY -= 11;
-    if (!opts.showTracks) {
-        return;
-    }
-    const trackSize = 6.5;
-    const lineH = trackSize + 1.5;
+    cursorY -= titleSize + 3;
+
+    const trackSize = 6.2;
+    const lineH = trackSize + 1.6;
     const minY = box.y + pad;
     for (const track of disc.tracks) {
         if (cursorY < minY + lineH) {
@@ -271,11 +257,30 @@ function drawAlbumOverlayText(
         const idx = String(track.index + 1).padStart(2, '0');
         const dur = formatTimeFromSeconds(track.durationSec, false);
         const durW = font.widthOfTextAtSize(dur, trackSize);
-        const name = truncateToWidth(font, `${idx}  ${track.title || 'Untitled'}`, trackSize, box.width - pad * 2 - durW - 4);
+        const name = truncateToWidth(font, `${idx}  ${track.title || 'Untitled'}`, trackSize, box.width - pad * 2 - durW - 3);
         page.drawText(name, { x: box.x + pad, y: cursorY, size: trackSize, font, color: ink });
         page.drawText(dur, { x: box.x + box.width - pad - durW, y: cursorY, size: trackSize, font, color: ink });
         cursorY -= lineH;
     }
+}
+
+function drawAlbumEdgeTitle(
+    page: PDFPage,
+    fontBold: PDFFont,
+    disc: LabelDiscInfo,
+    box: { x: number; y: number; width: number; height: number }
+) {
+    page.drawRectangle({ ...box, color: rgb(0, 0, 0), opacity: 0.35 });
+    const text = disc.title || 'Untitled Disc';
+    const size = Math.min(7.5, box.height * 0.55);
+    const truncated = truncateToWidth(fontBold, text, size, box.width - 4 * PT_PER_MM);
+    page.drawText(truncated, {
+        x: box.x + 2 * PT_PER_MM,
+        y: box.y + (box.height - size) / 2,
+        size,
+        font: fontBold,
+        color: rgb(1, 1, 1),
+    });
 }
 
 async function embedCoverOrNull(pdf: PDFDocument, bytes: Uint8Array | null, mime: string | null): Promise<PDFImage | null> {
@@ -324,41 +329,14 @@ export async function buildArtPdf(input: LabelPackInput, layout: A4LabelLayout =
         const cutBox = topLeftRectToPdf(layout, part.cut);
 
         if (input.artMode === 'album' && coverImage) {
-            if (id === 'edge') {
-                page.drawRectangle({ ...bleedBox, color: rgb(0.08, 0.08, 0.08) });
-                fitCoverDraw(page, coverImage, {
-                    x: bleedBox.x,
-                    y: bleedBox.y,
-                    width: bleedBox.width * 0.18,
-                    height: bleedBox.height,
-                });
-                const text = [input.disc.title || 'Untitled Disc', input.disc.artist].filter(Boolean).join(' — ');
-                const size = Math.min(8, cutBox.height * 0.55);
-                const truncated = truncateToWidth(fontBold, text, size, cutBox.width - 4 * PT_PER_MM);
-                page.drawText(truncated, {
-                    x: cutBox.x + 2 * PT_PER_MM,
-                    y: cutBox.y + (cutBox.height - size) / 2,
-                    size,
-                    font: fontBold,
-                    color: rgb(1, 1, 1),
-                });
-            } else {
-                fitCoverDraw(page, coverImage, bleedBox);
-                page.drawRectangle({ ...cutBox, color: rgb(0, 0, 0), opacity: 0.35 });
-                if (id === 'face') {
-                    drawAlbumOverlayText(page, font, fontBold, input.disc, cutBox, { showTracks: true });
-                } else {
-                    const spineW = (part.spineFoldX ?? 0) * PT_PER_MM;
-                    drawAlbumOverlayText(
-                        page,
-                        font,
-                        fontBold,
-                        input.disc,
-                        { x: cutBox.x + spineW, y: cutBox.y, width: cutBox.width - spineW, height: cutBox.height },
-                        { showTracks: true }
-                    );
-                }
+            // Cover fills the bleed box (cover/crop). No theme colours in album mode.
+            fitCoverDraw(page, coverImage, bleedBox);
+            if (id === 'face') {
+                drawAlbumFaceTracklist(page, font, fontBold, input.disc, cutBox);
+            } else if (id === 'edge') {
+                drawAlbumEdgeTitle(page, fontBold, input.disc, cutBox);
             }
+            // box: album art only — no text
             continue;
         }
 

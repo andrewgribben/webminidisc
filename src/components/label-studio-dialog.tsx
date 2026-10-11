@@ -251,7 +251,9 @@ export function LabelStudioDialog({
                             ) : null}
                             <Typography variant="body2">
                                 <strong>Source:</strong>{' '}
-                                {artMode === 'album' ? 'Album art + tracklist' : 'Typographic (no album art)'}
+                                {artMode === 'album'
+                                    ? 'Saved album art (MusicBrainz / library)'
+                                    : 'Typographic (mix disc — no album art)'}
                             </Typography>
                             <Typography variant="subtitle1">{labelDisc?.title}</Typography>
                             {labelDisc?.artist ? (
@@ -266,8 +268,13 @@ export function LabelStudioDialog({
                                 Mode: {artMode}
                                 {status ? ` · ${status}` : ''}
                             </Typography>
+                            {artMode === 'album' ? (
+                                <Typography variant="caption" color="text.secondary">
+                                    Face: tracklist on cover · Edge: title on cover · Box: cover only
+                                </Typography>
+                            ) : null}
 
-                            {(artMode === 'typographic' || forceTypographic || designMode) && (
+                            {(artMode === 'typographic' || forceTypographic) && (
                                 <>
                                     <Typography variant="caption" color="text.secondary">
                                         Theme (Nothing / TE)
