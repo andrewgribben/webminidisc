@@ -4,6 +4,7 @@ import svgr from "vite-plugin-svgr";
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import inject from '@rollup/plugin-inject';
 import { VitePWA } from 'vite-plugin-pwa';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 let base = process.env.PUBLIC_URL ?? '/';
 if(!base.endsWith("/")) base += '/';
@@ -15,6 +16,7 @@ export default ({ mode }) => {
   return defineConfig({
     base,
     plugins: [
+      basicSsl(),
       svgr(),
       react(),
       nodePolyfills({
@@ -87,6 +89,10 @@ export default ({ mode }) => {
         },
       }),
     ],
+    server: {
+      // WebUSB requires a secure context; localhost HTTPS is fine with the basic-ssl cert.
+      https: true,
+    },
     build: {
       commonjsOptions: { transformMixedEsModules: true },
       rollupOptions: {
