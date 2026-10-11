@@ -215,9 +215,10 @@ export function TrackRow({
     savedCopy,
 }: TrackRowProps) {
     const minidiscSpec = serviceRegistry.netmdSpec;
-    const formatInfo = minidiscSpec!.availableFormats.find(
-        (e) => e.codec === track.encoding.codec && e.availableBitrates.includes(track.encoding.bitrate)
-    )!;
+    const formatInfo =
+        minidiscSpec?.availableFormats.find(
+            (e) => e.codec === track.encoding.codec && e.availableBitrates.includes(track.encoding.bitrate)
+        ) ?? null;
     const { classes, cx } = useStyles();
 
     const deviceCapabilities = useDeviceCapabilities();

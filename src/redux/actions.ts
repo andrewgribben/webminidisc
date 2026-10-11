@@ -362,6 +362,17 @@ export function pair(serviceInstance: NetMDService, spec: MinidiscSpec) {
         serviceRegistry.netmdSpec = spec;
         serviceRegistry.netmdFactoryService = undefined;
 
+        if (!spec) {
+            dispatch(
+                batchActions([
+                    appStateActions.setPairingMessage('Device profile is missing; cannot open the main screen.'),
+                    appStateActions.setPairingFailed(true),
+                    appStateActions.setConnectingInProgress(false),
+                ])
+            );
+            return;
+        }
+
         try {
             const connected = await serviceRegistry.netmdService!.connect();
             if (connected) {

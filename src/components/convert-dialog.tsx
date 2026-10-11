@@ -249,6 +249,15 @@ function createForcedEncodingText(selectedCodec: Codec, file: { forcedEncoding: 
 
 // `files` always appends to the list
 export const ConvertDialog = (props: { files: (File | AdaptiveFile)[] }) => {
+    // ConvertDialog is mounted whenever Main is; without a connected device there is no spec yet.
+    // Keep hooks out of this wrapper so we never call them against an undefined MinidiscSpec.
+    if (!serviceRegistry.netmdSpec) {
+        return null;
+    }
+    return <ConvertDialogBody files={props.files} />;
+};
+
+const ConvertDialogBody = (props: { files: (File | AdaptiveFile)[] }) => {
     const dispatch = useDispatch();
     const { classes, cx } = useStyles();
 
