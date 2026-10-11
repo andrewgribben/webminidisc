@@ -15,6 +15,8 @@ import { W95App } from './win95/app';
 import { FilePlayer } from './file-player';
 import { validateAndLoadEncoders } from '../redux/actions';
 import { EncoderDownloadDialog } from './encoder-download-dialog';
+import { LabelStudioDialog } from './label-studio-dialog';
+import { isLabelDesignMode } from '../services/labels/demo-disc';
 
 const Toc = lazy(() => import('./factory/factory'));
 const Controls = lazy(() => import('./controls'));
@@ -232,10 +234,17 @@ const InternalApp = () => {
     const { deviceCapabilities } = useShallowEqualSelector((state) => state.main);
     const { classes, cx } = useStyles();
     const dispatch = useDispatch();
+    const [labelDesignOpen, setLabelDesignOpen] = React.useState(() => isLabelDesignMode());
 
     // At init, connect to server and check for encoders.
     useEffect(() => {
         dispatch(validateAndLoadEncoders(true));
+    }, []);
+
+    useEffect(() => {
+        if (isLabelDesignMode()) {
+            setLabelDesignOpen(true);
+        }
     }, []);
 
     return (
@@ -285,6 +294,20 @@ const InternalApp = () => {
             ) : null}
 
             <EncoderDownloadDialog />
+            {labelDesignOpen ? (
+                <LabelStudioDialog
+                    open={labelDesignOpen}
+                    designMode
+                    onClose={() => {
+                        setLabelDesignOpen(false);
+                        const url = new URL(window.location.href);
+                        if (url.searchParams.get('labels') === 'design') {
+                            url.searchParams.delete('labels');
+                            window.history.replaceState({}, '', url.toString());
+                        }
+                    }}
+                />
+            ) : null}
         </React.Fragment>
     );
 };

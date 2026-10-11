@@ -4,9 +4,9 @@ import { getTracks } from '../../utils';
 import { ALL_PARTS, LabelPartId, createA4LabelLayout } from './a4-layout';
 import { buildArtPdf } from './build-art-pdf';
 import { buildCutSvg } from './build-cut-svg';
-import { hashStringToSeed, paletteFromSeed, randomSeed } from './generative-art';
 import { getCachedLabelPack, putCachedLabelPack } from './label-cache';
-import { LabelArtMode, LabelDiscInfo, LabelPackArtifacts, LabelPackInput } from './types';
+import { DEFAULT_LABEL_THEME } from './themes';
+import { LabelArtMode, LabelDiscInfo, LabelPackArtifacts, LabelPackInput, LabelTheme } from './types';
 
 export function discToLabelInfo(disc: Disc, libraryTitle?: string | null): LabelDiscInfo {
     const tracks = getTracks(disc).map((track) => ({
@@ -28,13 +28,16 @@ export function discToLabelInfo(disc: Disc, libraryTitle?: string | null): Label
 export async function fingerprintLabelPack(
     disc: LabelDiscInfo,
     artMode: LabelArtMode,
-    seed: number,
+    theme: LabelTheme,
     coverUrl: string | null,
     parts: LabelPartId[]
 ): Promise<string> {
     const raw = [
         artMode,
-        String(seed),
+        theme.id,
+        theme.background,
+        theme.text,
+        theme.accent,
         coverUrl ?? '',
         parts.slice().sort().join(','),
         disc.title,
@@ -67,99 +70,93 @@ export interface EnsureLabelPackOptions {
     disc: Disc;
     libraryTitle?: string | null;
     coverUrl: string | null;
-    /** Force generative even if cover exists. */
-    forceGenerative?: boolean;
-    seed?: number;
+    /** Optional preloaded cover (design mode / tests) — skips network fetch. */
+    coverBytes?: Uint8Array | null;
+    coverMime?: string | null;
+    /** Force typographic style even if cover exists. */
+    forceTypographic?: boolean;
+    theme?: LabelTheme;
     parts?: LabelPartId[];
     /** When true, ignore cache and regenerate. */
     forceRegenerate?: boolean;
+    /** Bypass IndexedDB (design mode). */
+    skipCache?: boolean;
 }
 
 export async function ensureLabelPack(options: EnsureLabelPackOptions): Promise<LabelPackArtifacts & { fromCache: boolean }> {
     const parts = options.parts?.length ? options.parts : ALL_PARTS;
     const labelDisc = discToLabelInfo(options.disc, options.libraryTitle);
     const signature = await discSignature(options.disc);
+    const theme = options.theme ?? DEFAULT_LABEL_THEME;
 
-    const wantsAlbumArt = Boolean(options.coverUrl) && !options.forceGenerative;
-    let cover = wantsAlbumArt ? await fetchCoverBytes(options.coverUrl) : null;
+    const hasCoverSource = Boolean(options.coverBytes?.length || options.coverUrl);
+    const wantsAlbumArt = hasCoverSource && !options.forceTypographic;
+    let cover: { bytes: Uint8Array; mime: string } | null = null;
+    if (wantsAlbumArt) {
+        if (options.coverBytes?.length) {
+            cover = { bytes: options.coverBytes, mime: options.coverMime || 'image/png' };
+        } else {
+            cover = await fetchCoverBytes(options.coverUrl);
+        }
+    }
     if (wantsAlbumArt && !cover) {
         throw new Error(
-            'Could not load album art for labels. The cover may be blocked or missing from the library — try Match album again, or use generative art.'
+            'Could not load album art for labels. The cover may be blocked or missing from the library — try Match album again, or use typographic style.'
         );
     }
 
-    // Generative only for mix discs with no saved cover (or when the user forces it).
-    const artMode: LabelArtMode = cover ? 'album' : 'generative';
-    const seed =
-        options.seed ??
-        (artMode === 'generative' ? hashStringToSeed(`${signature}:${labelDisc.title}`) : 0);
+    const artMode: LabelArtMode = cover ? 'album' : 'typographic';
+    const fingerprint = await fingerprintLabelPack(labelDisc, artMode, theme, options.coverUrl, parts);
 
-    const fingerprint = await fingerprintLabelPack(labelDisc, artMode, seed, options.coverUrl, parts);
-
-    if (!options.forceRegenerate) {
+    if (!options.forceRegenerate && !options.skipCache) {
         const cached = await getCachedLabelPack(signature);
         if (cached && cached.fingerprint === fingerprint) {
             return {
                 artPdf: new Uint8Array(cached.artPdf),
                 cutSvg: cached.cutSvg,
                 fingerprint: cached.fingerprint,
-                seed: cached.seed,
                 artMode: cached.artMode,
-                palette: cached.palette,
+                theme: cached.theme,
                 fromCache: true,
             };
         }
     }
 
-    const effectiveMode: LabelArtMode = artMode;
-    const effectiveSeed = effectiveMode === 'generative' ? seed || randomSeed() : seed;
-    const palette = paletteFromSeed(effectiveSeed || hashStringToSeed(labelDisc.title));
-
     const input: LabelPackInput = {
         disc: labelDisc,
-        artMode: effectiveMode,
-        seed: effectiveSeed,
+        artMode,
+        theme,
         coverBytes: cover?.bytes ?? null,
         coverMime: cover?.mime ?? null,
         parts,
     };
 
     const layout = createA4LabelLayout();
-    const artPdf = await buildArtPdf(input, palette, layout);
+    const artPdf = await buildArtPdf(input, layout);
     const cutSvg = buildCutSvg(parts, layout);
-    const finalFingerprint = await fingerprintLabelPack(
-        labelDisc,
-        effectiveMode,
-        effectiveSeed,
-        options.coverUrl,
-        parts
-    );
+    const finalFingerprint = await fingerprintLabelPack(labelDisc, artMode, theme, options.coverUrl, parts);
 
-    const artPdfCopy = artPdf.slice().buffer as ArrayBuffer;
-    await putCachedLabelPack(signature, {
-        fingerprint: finalFingerprint,
-        seed: effectiveSeed,
-        artMode: effectiveMode,
-        createdAt: Date.now(),
-        artPdf: artPdfCopy,
-        cutSvg,
-        palette,
-    });
+    if (!options.skipCache) {
+        const artPdfCopy = artPdf.slice().buffer as ArrayBuffer;
+        await putCachedLabelPack(signature, {
+            fingerprint: finalFingerprint,
+            artMode,
+            theme,
+            createdAt: Date.now(),
+            artPdf: artPdfCopy,
+            cutSvg,
+        });
+    }
 
     return {
         artPdf,
         cutSvg,
         fingerprint: finalFingerprint,
-        seed: effectiveSeed,
-        artMode: effectiveMode,
-        palette,
+        artMode,
+        theme,
         fromCache: false,
     };
 }
 
-export function defaultSeedForDisc(disc: Disc, title?: string | null): Promise<number> {
-    return discSignature(disc).then((sig) => hashStringToSeed(`${sig}:${title || disc.title || ''}`));
-}
-
-export { randomSeed, ALL_PARTS };
+export { ALL_PARTS };
 export type { LabelPartId };

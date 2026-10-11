@@ -53,13 +53,26 @@ function withBleed(cut: RectMm, bleed: number): RectMm {
 }
 
 /**
- * Fixed A4 placement: face top-left, edge under face, box to the right.
- * Positions stay constant for full-pack and per-part exports.
+ * Fixed A4 placement: face top-left, box to its right, edge under both.
+ * Gaps must exceed 2× bleed so overprint rectangles never overlap.
  */
 export function createA4LabelLayout(): A4LabelLayout {
-    const faceCut: RectMm = { x: 22, y: 28, width: FACE_CUT.width, height: FACE_CUT.height };
-    const edgeCut: RectMm = { x: 22, y: 28 + FACE_CUT.height + 12, width: EDGE_CUT.width, height: EDGE_CUT.height };
-    const boxCut: RectMm = { x: 22 + FACE_CUT.width + 18, y: 28, width: BOX_CUT.width, height: BOX_CUT.height };
+    const margin = 18;
+    const gap = 14; // > 2 × BLEED_MM
+    const faceCut: RectMm = { x: margin, y: 24, width: FACE_CUT.width, height: FACE_CUT.height };
+    const boxCut: RectMm = {
+        x: margin + FACE_CUT.width + gap,
+        y: 24,
+        width: BOX_CUT.width,
+        height: BOX_CUT.height,
+    };
+    const rowBottom = Math.max(faceCut.y + faceCut.height, boxCut.y + boxCut.height);
+    const edgeCut: RectMm = {
+        x: margin,
+        y: rowBottom + gap,
+        width: EDGE_CUT.width,
+        height: EDGE_CUT.height,
+    };
 
     const parts: Record<LabelPartId, LabelPartLayout> = {
         face: {

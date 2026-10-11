@@ -6,23 +6,24 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
-import IconButton from '@mui/material/IconButton';
+import FormControl from '@mui/material/FormControl';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import DownloadIcon from '@mui/icons-material/Download';
 import JSZip from 'jszip';
 import { useShallowEqualSelector } from '../frontend-utils';
 import { downloadBlob, formatTimeFromSeconds, getTracks } from '../utils';
-import {
-    ALL_PARTS,
-    LabelPartId,
-    discToLabelInfo,
-    ensureLabelPack,
-    randomSeed,
-} from '../services/labels/label-pack';
+import { Disc } from '../services/interfaces/netmd';
+import { ALL_PARTS, LabelPartId, discToLabelInfo, ensureLabelPack } from '../services/labels/label-pack';
 import { FACE_CUT, EDGE_CUT, BOX_CUT } from '../services/labels/a4-layout';
-import { LabelArtMode, LabelPalette } from '../services/labels/types';
+import { DEFAULT_LABEL_THEME, LABEL_THEMES, customTheme } from '../services/labels/themes';
+import { DEMO_ALBUM_DISC, DEMO_MIX_DISC, demoCoverPngBytes } from '../services/labels/demo-disc';
+import { LabelArtMode, LabelTheme } from '../services/labels/types';
 
 function asBlobPart(bytes: Uint8Array): BlobPart {
     return bytes.slice().buffer as ArrayBuffer;
@@ -48,24 +49,46 @@ function partTitle(id: LabelPartId): string {
     return 'Box / case';
 }
 
-export function LabelStudioDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-    const disc = useShallowEqualSelector((state) => state.main.disc);
-    const coverUrl = useShallowEqualSelector((state) => state.discLibrary.coverUrl);
+export type LabelStudioDemoKind = 'mix' | 'album';
+
+export function LabelStudioDialog({
+    open,
+    onClose,
+    designMode = false,
+}: {
+    open: boolean;
+    onClose: () => void;
+    /** When true, use dummy disc data (no NetMD). Open via ?labels=design */
+    designMode?: boolean;
+}) {
+    const liveDisc = useShallowEqualSelector((state) => state.main.disc);
+    const liveCoverUrl = useShallowEqualSelector((state) => state.discLibrary.coverUrl);
     const libraryTitle = useShallowEqualSelector((state) => state.discLibrary.title);
 
+    const [demoKind, setDemoKind] = useState<LabelStudioDemoKind>('mix');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [status, setStatus] = useState('');
-    const [seed, setSeed] = useState(0);
-    const [artMode, setArtMode] = useState<LabelArtMode>('generative');
-    const [palette, setPalette] = useState<LabelPalette | null>(null);
+    const [artMode, setArtMode] = useState<LabelArtMode>('typographic');
+    const [theme, setTheme] = useState<LabelTheme>(DEFAULT_LABEL_THEME);
+    const [customBg, setCustomBg] = useState('#F7F5F0');
+    const [customText, setCustomText] = useState('#111111');
+    const [forceTypographic, setForceTypographic] = useState(false);
     const [artPdf, setArtPdf] = useState<Uint8Array | null>(null);
     const [cutSvg, setCutSvg] = useState<string | null>(null);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-    const [forceGenerative, setForceGenerative] = useState(false);
 
-    const labelDisc = useMemo(() => (disc ? discToLabelInfo(disc, libraryTitle) : null), [disc, libraryTitle]);
+    const disc: Disc | null = designMode ? (demoKind === 'album' ? DEMO_ALBUM_DISC : DEMO_MIX_DISC) : liveDisc;
+    const coverUrl = designMode ? null : liveCoverUrl;
+    const demoCoverBytes = useMemo(() => (designMode && demoKind === 'album' ? demoCoverPngBytes() : null), [designMode, demoKind]);
+
+    const labelDisc = useMemo(
+        () => (disc ? discToLabelInfo(disc, designMode ? disc.title : libraryTitle) : null),
+        [designMode, disc, libraryTitle]
+    );
     const trackCount = disc ? getTracks(disc).length : 0;
+
+    const activeTheme = theme.id === 'custom' ? customTheme(customBg, customText) : theme;
 
     useEffect(() => {
         if (!pdfUrl) {
@@ -75,7 +98,7 @@ export function LabelStudioDialog({ open, onClose }: { open: boolean; onClose: (
     }, [pdfUrl]);
 
     const generate = useCallback(
-        async (opts: { seed?: number; forceRegenerate?: boolean; forceGenerative?: boolean }) => {
+        async (opts: { forceRegenerate?: boolean; forceTypographic?: boolean; theme?: LabelTheme } = {}) => {
             if (!disc) {
                 setError('Connect a disc before generating labels.');
                 return;
@@ -83,21 +106,24 @@ export function LabelStudioDialog({ open, onClose }: { open: boolean; onClose: (
             setLoading(true);
             setError('');
             try {
+                const useTypographic = opts.forceTypographic ?? forceTypographic;
                 const result = await ensureLabelPack({
                     disc,
-                    libraryTitle,
-                    coverUrl,
-                    seed: opts.seed,
-                    forceRegenerate: opts.forceRegenerate,
-                    forceGenerative: opts.forceGenerative ?? forceGenerative,
+                    libraryTitle: designMode ? disc.title : libraryTitle,
+                    coverUrl: designMode ? (demoCoverBytes ? 'demo:cover' : null) : coverUrl,
+                    coverBytes: demoCoverBytes,
+                    coverMime: demoCoverBytes ? 'image/png' : null,
+                    theme: opts.theme ?? activeTheme,
+                    forceRegenerate: opts.forceRegenerate ?? true,
+                    forceTypographic: useTypographic || (designMode && demoKind === 'mix'),
+                    skipCache: designMode,
                     parts: ALL_PARTS,
                 });
                 setArtPdf(result.artPdf);
                 setCutSvg(result.cutSvg);
-                setSeed(result.seed);
                 setArtMode(result.artMode);
-                setPalette(result.palette);
-                setStatus(result.fromCache ? 'Loaded from cache' : 'Generated');
+                setTheme(result.theme.id === 'custom' ? theme : result.theme);
+                setStatus(result.fromCache ? 'Loaded from cache' : designMode ? 'Design preview' : 'Generated');
                 const url = URL.createObjectURL(new Blob([asBlobPart(result.artPdf)], { type: 'application/pdf' }));
                 setPdfUrl((prev) => {
                     if (prev) {
@@ -111,16 +137,22 @@ export function LabelStudioDialog({ open, onClose }: { open: boolean; onClose: (
                 setLoading(false);
             }
         },
-        [coverUrl, disc, forceGenerative, libraryTitle]
+        [activeTheme, coverUrl, demoCoverBytes, demoKind, designMode, disc, forceTypographic, libraryTitle, theme]
     );
 
     useEffect(() => {
         if (!open) {
             return;
         }
-        setForceGenerative(false);
-        void generate({});
-    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- regenerate only on open
+        if (designMode) {
+            setForceTypographic(demoKind === 'mix');
+            setTheme(DEFAULT_LABEL_THEME);
+        } else {
+            setForceTypographic(false);
+        }
+        void generate({ forceRegenerate: true, forceTypographic: designMode ? demoKind === 'mix' : false });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- open / designKind drive regeneration
+    }, [open, designMode, demoKind]);
 
     const downloadArtPdf = () => {
         if (!artPdf) {
@@ -159,11 +191,14 @@ export function LabelStudioDialog({ open, onClose }: { open: boolean; onClose: (
         try {
             const result = await ensureLabelPack({
                 disc,
-                libraryTitle,
-                coverUrl,
-                seed,
+                libraryTitle: designMode ? disc.title : libraryTitle,
+                coverUrl: designMode ? (demoCoverBytes ? 'demo:cover' : null) : coverUrl,
+                coverBytes: demoCoverBytes,
+                coverMime: demoCoverBytes ? 'image/png' : null,
+                theme: activeTheme,
                 forceRegenerate: true,
-                forceGenerative: forceGenerative || artMode === 'generative',
+                forceTypographic: forceTypographic || artMode === 'typographic',
+                skipCache: designMode,
                 parts: [part],
             });
             const base = (labelDisc?.title || 'minidisc').replace(/[^\w\-]+/g, '_').slice(0, 48);
@@ -176,9 +211,14 @@ export function LabelStudioDialog({ open, onClose }: { open: boolean; onClose: (
         }
     };
 
+    const applyTheme = (next: LabelTheme) => {
+        setTheme(next);
+        void generate({ forceRegenerate: true, theme: next.id === 'custom' ? customTheme(customBg, customText) : next });
+    };
+
     return (
         <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-            <DialogTitle>Label Studio</DialogTitle>
+            <DialogTitle>{designMode ? 'Label Studio · design mode' : 'Label Studio'}</DialogTitle>
             <DialogContent dividers>
                 {!disc ? (
                     <Typography color="error">No disc loaded.</Typography>
@@ -186,22 +226,32 @@ export function LabelStudioDialog({ open, onClose }: { open: boolean; onClose: (
                     <Box
                         sx={{
                             display: 'grid',
-                            gridTemplateColumns: { xs: '1fr', md: '220px 1fr 220px' },
+                            gridTemplateColumns: { xs: '1fr', md: '240px 1fr 220px' },
                             gap: 2,
                             minHeight: 420,
                         }}
                     >
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                             <Typography variant="overline" color="text.secondary">
-                                Generative rules
+                                Style
                             </Typography>
+                            {designMode ? (
+                                <FormControl size="small" fullWidth>
+                                    <InputLabel id="demo-kind-label">Demo disc</InputLabel>
+                                    <Select
+                                        labelId="demo-kind-label"
+                                        label="Demo disc"
+                                        value={demoKind}
+                                        onChange={(e) => setDemoKind(e.target.value as LabelStudioDemoKind)}
+                                    >
+                                        <MenuItem value="mix">Mix disc (typographic)</MenuItem>
+                                        <MenuItem value="album">Album disc (+ demo art)</MenuItem>
+                                    </Select>
+                                </FormControl>
+                            ) : null}
                             <Typography variant="body2">
                                 <strong>Source:</strong>{' '}
-                                {coverUrl && !forceGenerative && artMode === 'album'
-                                    ? 'Album art + tracklist'
-                                    : coverUrl && forceGenerative
-                                      ? 'Generative (album art available)'
-                                      : 'Track metadata (no album art)'}
+                                {artMode === 'album' ? 'Album art + tracklist' : 'Typographic (no album art)'}
                             </Typography>
                             <Typography variant="subtitle1">{labelDisc?.title}</Typography>
                             {labelDisc?.artist ? (
@@ -216,75 +266,88 @@ export function LabelStudioDialog({ open, onClose }: { open: boolean; onClose: (
                                 Mode: {artMode}
                                 {status ? ` · ${status}` : ''}
                             </Typography>
-                            {palette ? (
-                                <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-                                    {palette.colors.map((color) => (
-                                        <Box
-                                            key={color}
-                                            title={color}
-                                            sx={{
-                                                width: 28,
-                                                height: 28,
-                                                bgcolor: color,
-                                                border: '1px solid',
-                                                borderColor: 'divider',
+
+                            {(artMode === 'typographic' || forceTypographic || designMode) && (
+                                <>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Theme (Nothing / TE)
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                                        {LABEL_THEMES.map((preset) => (
+                                            <Button
+                                                key={preset.id}
+                                                size="small"
+                                                variant={theme.id === preset.id ? 'contained' : 'outlined'}
+                                                onClick={() => applyTheme(preset)}
+                                                sx={{
+                                                    justifyContent: 'flex-start',
+                                                    textTransform: 'none',
+                                                    gap: 1,
+                                                }}
+                                            >
+                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                    <Box sx={{ width: 14, height: 14, bgcolor: preset.background, border: '1px solid #ccc' }} />
+                                                    <Box sx={{ width: 14, height: 14, bgcolor: preset.text }} />
+                                                    <Box sx={{ width: 14, height: 14, bgcolor: preset.accent }} />
+                                                </Box>
+                                                {preset.name}
+                                            </Button>
+                                        ))}
+                                    </Box>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Custom colours
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <TextField
+                                            label="Background"
+                                            size="small"
+                                            type="color"
+                                            value={customBg}
+                                            onChange={(e) => setCustomBg(e.target.value)}
+                                            sx={{ flex: 1 }}
+                                            InputLabelProps={{ shrink: true }}
+                                        />
+                                        <TextField
+                                            label="Text"
+                                            size="small"
+                                            type="color"
+                                            value={customText}
+                                            onChange={(e) => setCustomText(e.target.value)}
+                                            sx={{ flex: 1 }}
+                                            InputLabelProps={{ shrink: true }}
+                                        />
+                                    </Box>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={() => applyTheme(customTheme(customBg, customText))}
+                                    >
+                                        Apply custom colours
+                                    </Button>
+                                </>
+                            )}
+
+                            {!designMode && coverUrl ? (
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            checked={forceTypographic}
+                                            onChange={(_, checked) => {
+                                                setForceTypographic(checked);
+                                                void generate({ forceRegenerate: true, forceTypographic: checked });
                                             }}
                                         />
-                                    ))}
-                                </Box>
+                                    }
+                                    label="Typographic instead of album art"
+                                />
                             ) : null}
-                            {(artMode === 'generative' || forceGenerative || !coverUrl) && (
-                                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                                    <TextField
-                                        label="Seed"
-                                        size="small"
-                                        value={seed || ''}
-                                        onChange={(e) => setSeed(Number(e.target.value) || 0)}
-                                        inputProps={{ inputMode: 'numeric' }}
-                                        fullWidth
-                                    />
-                                    <IconButton
-                                        aria-label="New seed"
-                                        onClick={() => {
-                                            const next = randomSeed();
-                                            setSeed(next);
-                                            setForceGenerative(true);
-                                            void generate({ seed: next, forceRegenerate: true, forceGenerative: true });
-                                        }}
-                                    >
-                                        <RefreshIcon />
-                                    </IconButton>
-                                </Box>
-                            )}
-                            {coverUrl ? (
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    onClick={() => {
-                                        const next = forceGenerative ? false : true;
-                                        setForceGenerative(next);
-                                        void generate({
-                                            seed: next ? seed || randomSeed() : undefined,
-                                            forceRegenerate: true,
-                                            forceGenerative: next,
-                                        });
-                                    }}
-                                >
-                                    {forceGenerative ? 'Use album art' : 'Use generative art'}
-                                </Button>
-                            ) : null}
+
                             <Button
                                 variant="contained"
                                 disabled={loading}
-                                onClick={() =>
-                                    void generate({
-                                        seed: artMode === 'generative' || forceGenerative ? seed || randomSeed() : seed,
-                                        forceRegenerate: true,
-                                        forceGenerative,
-                                    })
-                                }
+                                onClick={() => void generate({ forceRegenerate: true })}
                             >
-                                Regenerate
+                                Refresh preview
                             </Button>
                             {loading ? <CircularProgress size={28} /> : null}
                             {error ? (
