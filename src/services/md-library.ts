@@ -73,16 +73,40 @@ export interface DetailedDisc {
     tracks: DetailedTrack[];
 }
 
+function coverArtArchiveProxyUrl(absoluteUrl: string): string | null {
+    // CAA and Internet Archive do not send CORS headers; fetch()/PDF embedding must use our proxy.
+    try {
+        const parsed = new URL(absoluteUrl);
+        const host = parsed.hostname.replace(/^www\./, '');
+        if (host === 'coverartarchive.org') {
+            const match = parsed.pathname.match(/^\/release\/([0-9a-f-]{36})/i);
+            if (match) {
+                return `${libraryRoot}/api/covers/release/${match[1]}`;
+            }
+        }
+        if (host === 'archive.org') {
+            const match = parsed.pathname.match(/\/download\/mbid-([0-9a-f-]{36})\//i);
+            if (match) {
+                return `${libraryRoot}/api/covers/release/${match[1]}`;
+            }
+        }
+    } catch {
+        return null;
+    }
+    return null;
+}
+
 export function libraryAssetUrl(path: string | null | undefined): string | null {
     if (!path) {
         return null;
     }
     if (path.startsWith('http://')) {
         // MusicBrainz cover art is served over HTTP. The page is HTTPS, so the image has to use HTTPS.
-        return `https://${path.slice('http://'.length)}`;
+        const httpsUrl = `https://${path.slice('http://'.length)}`;
+        return coverArtArchiveProxyUrl(httpsUrl) ?? httpsUrl;
     }
     if (path.startsWith('https://')) {
-        return path;
+        return coverArtArchiveProxyUrl(path) ?? path;
     }
     return `${libraryRoot}${path.startsWith('/') ? path : `/${path}`}`;
 }

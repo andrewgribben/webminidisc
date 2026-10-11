@@ -80,7 +80,15 @@ export async function ensureLabelPack(options: EnsureLabelPackOptions): Promise<
     const labelDisc = discToLabelInfo(options.disc, options.libraryTitle);
     const signature = await discSignature(options.disc);
 
-    let cover = options.forceGenerative ? null : await fetchCoverBytes(options.coverUrl);
+    const wantsAlbumArt = Boolean(options.coverUrl) && !options.forceGenerative;
+    let cover = wantsAlbumArt ? await fetchCoverBytes(options.coverUrl) : null;
+    if (wantsAlbumArt && !cover) {
+        throw new Error(
+            'Could not load album art for labels. The cover may be blocked or missing from the library — try Match album again, or use generative art.'
+        );
+    }
+
+    // Generative only for mix discs with no saved cover (or when the user forces it).
     const artMode: LabelArtMode = cover ? 'album' : 'generative';
     const seed =
         options.seed ??
@@ -103,11 +111,7 @@ export async function ensureLabelPack(options: EnsureLabelPackOptions): Promise<
         }
     }
 
-    // If album mode requested cover but fetch failed mid-flight, fall back to generative.
-    if (artMode === 'album' && !cover) {
-        cover = null;
-    }
-    const effectiveMode: LabelArtMode = cover ? 'album' : 'generative';
+    const effectiveMode: LabelArtMode = artMode;
     const effectiveSeed = effectiveMode === 'generative' ? seed || randomSeed() : seed;
     const palette = paletteFromSeed(effectiveSeed || hashStringToSeed(labelDisc.title));
 

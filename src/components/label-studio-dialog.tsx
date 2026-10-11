@@ -196,7 +196,12 @@ export function LabelStudioDialog({ open, onClose }: { open: boolean; onClose: (
                                 Generative rules
                             </Typography>
                             <Typography variant="body2">
-                                <strong>Source:</strong> {coverUrl && !forceGenerative ? 'Album art + tracklist' : 'Track metadata'}
+                                <strong>Source:</strong>{' '}
+                                {coverUrl && !forceGenerative && artMode === 'album'
+                                    ? 'Album art + tracklist'
+                                    : coverUrl && forceGenerative
+                                      ? 'Generative (album art available)'
+                                      : 'Track metadata (no album art)'}
                             </Typography>
                             <Typography variant="subtitle1">{labelDisc?.title}</Typography>
                             {labelDisc?.artist ? (

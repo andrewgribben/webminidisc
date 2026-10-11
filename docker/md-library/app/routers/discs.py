@@ -2,12 +2,21 @@ from fastapi import APIRouter, HTTPException, Response
 from ..db import SessionLocal
 from .. import models as m
 from ..schemas import DiscCreate, SaveDiscResponse, Disc as DiscSchema, Track as TrackSchema, TrackUpdate, AlbumCoverUpload
+from ..services import coverart
+from ..services.coverart import same_origin_album_cover_path
 import hashlib
 import json
 import base64
 from typing import List, Optional, Dict, Any, Tuple
 
 router = APIRouter(prefix="/api/discs", tags=["discs"])
+
+
+def _public_cover_url(album: m.Album) -> Optional[str]:
+    """Always expose a same-origin cover path when any cover source exists."""
+    if album.cover_data or album.cover_url:
+        return same_origin_album_cover_path(album.id)
+    return None
 
 def _process_cover_data(cover_url: Optional[str]) -> Tuple[Optional[str], Optional[bytes], Optional[str]]:
     """
@@ -270,11 +279,7 @@ def get_album_library_cards() -> List[Dict[str, Any]]:
             if not cover_url and track.album_id:
                 album = session.query(m.Album).filter(m.Album.id == track.album_id).first()
                 if album:
-                    if album.cover_url:
-                        cover_url = album.cover_url
-                    elif album.cover_data:
-                        # If we have blob data but no URL, return the API endpoint
-                        cover_url = f"/api/discs/albums/{album.id}/cover"
+                    cover_url = _public_cover_url(album)
         
         album_cards.append({
             "disc_id": disc.id,
@@ -321,17 +326,11 @@ def get_disc_detailed(disc_id: int) -> Dict[str, Any]:
         if track.album_id:
             album = session.query(m.Album).filter(m.Album.id == track.album_id).first()
             if album:
-                # Determine cover URL: use actual URL or generate endpoint reference for blob
-                cover_url = album.cover_url
-                if not cover_url and album.cover_data:
-                    # If we have blob data but no URL, return the API endpoint
-                    cover_url = f"/api/discs/albums/{album.id}/cover"
-                
                 album_info = {
                     "id": album.id, 
                     "title": album.title, 
                     "mbid": album.mbid,
-                    "cover_url": cover_url,
+                    "cover_url": _public_cover_url(album),
                     "year": album.year
                 }
         
@@ -535,21 +534,37 @@ def update_album_cover(disc_id: int, cover_data: AlbumCoverUpload):
     }
 
 @router.get("/albums/{album_id}/cover")
-def get_album_cover(album_id: int):
-    """Get album cover image (returns blob if available, otherwise redirects to URL)"""
+async def get_album_cover(album_id: int):
+    """Serve album cover bytes. Proxies and caches remote CAA URLs so the browser stays same-origin."""
     session = SessionLocal()
     album = session.query(m.Album).filter(m.Album.id == album_id).first()
-    
+
     if not album:
+        session.close()
         raise HTTPException(status_code=404, detail="Album not found")
-    
-    # Return blob if available
+
     if album.cover_data:
         mime_type = album.cover_mime_type or "image/jpeg"
-        return Response(content=album.cover_data, media_type=mime_type)
-    
-    # Return URL if available
+        content = album.cover_data
+        session.close()
+        return Response(content=content, media_type=mime_type, headers={"Cache-Control": "public, max-age=86400"})
+
     if album.cover_url:
-        return {"cover_url": album.cover_url}
-    
+        remote = album.cover_url
+        # Match-dialog saves may store the same-origin release proxy path; resolve via MBID.
+        if remote.startswith("/api/covers/release/"):
+            mbid = remote.rstrip("/").split("/")[-1]
+            resolved = await coverart.get_front_cover_url(mbid)
+            remote = resolved or remote
+        if remote.startswith("http://") or remote.startswith("https://"):
+            fetched = await coverart.fetch_image_bytes(remote)
+            if fetched:
+                content, mime = fetched
+                album.cover_data = content
+                album.cover_mime_type = mime
+                session.commit()
+                session.close()
+                return Response(content=content, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
+
+    session.close()
     raise HTTPException(status_code=404, detail="No cover art available")

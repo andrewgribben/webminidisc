@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, HTTPException
 from rapidfuzz import fuzz
 from ..services import musicbrainz as mb, coverart
+from ..services.coverart import same_origin_release_cover_path
 from ..schemas import DiscFingerprint, MatchResponse, ReleaseAlignRequest, ReleaseDetailsResponse
 
 router = APIRouter(prefix="/api/enrich", tags=["enrich"])
@@ -255,7 +256,8 @@ async def match_meta(fp: DiscFingerprint):
     out = []
     for c in top:
         mbid = c["release"]["id"]
-        cover = await coverart.get_front_cover_url(mbid)
+        # Same-origin proxy — browsers cannot fetch CAA/archive.org (CORS).
+        cover = same_origin_release_cover_path(mbid)
         
         # Get track count - MusicBrainz search results use "track-count" field
         # If that's not available, try to sum from media tracks
@@ -313,7 +315,7 @@ async def align_release_details(mbid: str, body: ReleaseAlignRequest):
 async def release_payload(mbid: str, release_data: dict, fp_tracks: list | None):
     selected = best_window(flatten_release(release_data), fp_tracks)
     medium_position, medium_title = medium_summary(selected)
-    cover = await coverart.get_front_cover_url(mbid)
+    cover = same_origin_release_cover_path(mbid)
     return {
         "release_mbid": mbid,
         "title": release_data.get("title", ""),
