@@ -2,7 +2,7 @@ import re
 
 from fastapi import APIRouter, HTTPException
 from rapidfuzz import fuzz
-from ..services import musicbrainz as mb, coverart
+from ..services import musicbrainz as mb
 from ..services.coverart import same_origin_release_cover_path
 from ..schemas import DiscFingerprint, MatchResponse, ReleaseAlignRequest, ReleaseDetailsResponse
 
