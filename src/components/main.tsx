@@ -84,6 +84,7 @@ import { ContextMenu } from './context-menu';
 import { LocalLibraryDialog } from './local-library';
 import { DowntifyBar } from './downtify-bar';
 import { MatchAlbumDialog } from './match-album-dialog';
+import { LabelStudioDialog } from './label-studio-dialog';
 import { DowntifyLibraryService } from '../services/library/downtify-library';
 import { actions as discLibraryActions } from '../redux/disc-library-feature';
 import { loadKnownDisc, saveDiscAudio } from '../redux/disc-library-actions';
@@ -214,6 +215,7 @@ export const Main = (props: {}) => {
     const [moveMenuAnchorEl, setMoveMenuAnchorEl] = React.useState<null | HTMLElement>(null);
     const [showRemainingSpace, setShowRemainingSpace] = useState(true);
     const [matchOpen, setMatchOpen] = useState(false);
+    const [labelsOpen, setLabelsOpen] = useState(false);
     const [coverFailed, setCoverFailed] = useState(false);
 
     const deviceCapabilities = useDeviceCapabilities();
@@ -697,6 +699,9 @@ export const Main = (props: {}) => {
                     <Button size="small" variant="outlined" onClick={() => setMatchOpen(true)}>
                         Match album
                     </Button>
+                    <Button size="small" variant="outlined" onClick={() => setLabelsOpen(true)}>
+                        Labels
+                    </Button>
                     <Tooltip title="Copy tracks off the disc, convert them to WAV, and store them. The player for those files is separate from the MiniDisc controls.">
                         <Button size="small" variant="outlined" onClick={() => dispatch(saveDiscAudio(selected))} disabled={tracks.length === 0}>
                             Save audio
@@ -956,6 +961,7 @@ export const Main = (props: {}) => {
             <PanicDialog />
             <ContextMenu onTogglePlayPause={handleTogglePlayPauseTrack} onRename={handleRenameTrack} onDelete={handleDeleteTrack} />
             <MatchAlbumDialog open={matchOpen} onClose={() => setMatchOpen(false)} />
+            <LabelStudioDialog open={labelsOpen} onClose={() => setLabelsOpen(false)} />
         </React.Fragment>
     );
 };
