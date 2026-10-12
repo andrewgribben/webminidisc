@@ -1,0 +1,4 @@
+hamilton-front.jpg
+  MusicBrainz release: 2eece058-39a8-4dd7-af54-b94ae39ec7fa
+  Cover Art Archive front image (thumbnail) for Label Studio design-mode tests.
+  Source: https://coverartarchive.org/release/2eece058-39a8-4dd7-af54-b94ae39ec7fa

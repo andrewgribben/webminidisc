@@ -68,60 +68,25 @@ export const DEMO_ALBUM_DISC: Disc = {
     ],
 };
 
-/** Stand-in cover for design mode (no network) — poster-style art, not a flat theme fill. */
-export function demoCoverPngBytes(): Uint8Array {
-    const fallbackB64 =
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-    const fallbackBinary = atob(fallbackB64);
-    const fallback = new Uint8Array(fallbackBinary.length);
-    for (let i = 0; i < fallbackBinary.length; i++) {
-        fallback[i] = fallbackBinary.charCodeAt(i);
+/** Real CAA front cover for Hamilton (MBID 2eece058-39a8-4dd7-af54-b94ae39ec7fa), vendored for design mode. */
+export const DEMO_ALBUM_COVER_URL = '/label-fixtures/hamilton-front.jpg';
+export const DEMO_ALBUM_COVER_MIME = 'image/jpeg';
+
+let demoCoverCache: { bytes: Uint8Array; mime: string } | null = null;
+
+/** Load the MusicBrainz/CAA fixture cover (same-origin static file; no live CAA fetch). */
+export async function loadDemoAlbumCover(): Promise<{ bytes: Uint8Array; mime: string }> {
+    if (demoCoverCache) {
+        return demoCoverCache;
     }
-    if (typeof document === 'undefined') {
-        return fallback;
+    const response = await fetch(DEMO_ALBUM_COVER_URL);
+    if (!response.ok) {
+        throw new Error(`Could not load demo album cover (${response.status}).`);
     }
-    const canvas = document.createElement('canvas');
-    canvas.width = 600;
-    canvas.height = 600;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-        return fallback;
-    }
-    // Warm photo-like base
-    const base = ctx.createRadialGradient(220, 180, 40, 300, 320, 420);
-    base.addColorStop(0, '#3D2A1F');
-    base.addColorStop(0.45, '#8B4518');
-    base.addColorStop(1, '#1A0F0A');
-    ctx.fillStyle = base;
-    ctx.fillRect(0, 0, 600, 600);
-    // Soft colour fields (album-poster composition)
-    ctx.fillStyle = 'rgba(212, 90, 40, 0.55)';
-    ctx.beginPath();
-    ctx.ellipse(420, 160, 180, 120, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(240, 200, 80, 0.35)';
-    ctx.beginPath();
-    ctx.ellipse(140, 480, 200, 140, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(20, 20, 20, 0.35)';
-    ctx.fillRect(0, 0, 600, 90);
-    ctx.fillRect(0, 510, 600, 90);
-    // Fine grain so it doesn't read as a flat CSS colour
-    const grain = ctx.getImageData(0, 0, 600, 600);
-    for (let i = 0; i < grain.data.length; i += 16) {
-        const n = (Math.random() - 0.5) * 28;
-        grain.data[i] = Math.max(0, Math.min(255, grain.data[i] + n));
-        grain.data[i + 1] = Math.max(0, Math.min(255, grain.data[i + 1] + n));
-        grain.data[i + 2] = Math.max(0, Math.min(255, grain.data[i + 2] + n));
-    }
-    ctx.putImageData(grain, 0, 0);
-    const dataUrl = canvas.toDataURL('image/png');
-    const raw = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
-    const out = new Uint8Array(raw.length);
-    for (let i = 0; i < raw.length; i++) {
-        out[i] = raw.charCodeAt(i);
-    }
-    return out;
+    const mime = response.headers.get('content-type') || DEMO_ALBUM_COVER_MIME;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    demoCoverCache = { bytes, mime };
+    return demoCoverCache;
 }
 
 export function demoLabelInfo(disc: Disc): LabelDiscInfo {

@@ -22,7 +22,7 @@ import { Disc } from '../services/interfaces/netmd';
 import { ALL_PARTS, LabelPartId, discToLabelInfo, ensureLabelPack } from '../services/labels/label-pack';
 import { FACE_CUT, EDGE_CUT, BOX_CUT } from '../services/labels/a4-layout';
 import { DEFAULT_LABEL_THEME, LABEL_THEMES, customTheme } from '../services/labels/themes';
-import { DEMO_ALBUM_DISC, DEMO_MIX_DISC, demoCoverPngBytes } from '../services/labels/demo-disc';
+import { DEMO_ALBUM_COVER_URL, DEMO_ALBUM_DISC, DEMO_MIX_DISC, loadDemoAlbumCover } from '../services/labels/demo-disc';
 import { LabelArtMode, LabelTheme } from '../services/labels/types';
 
 function asBlobPart(bytes: Uint8Array): BlobPart {
@@ -77,10 +77,10 @@ export function LabelStudioDialog({
     const [artPdf, setArtPdf] = useState<Uint8Array | null>(null);
     const [cutSvg, setCutSvg] = useState<string | null>(null);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+    const [demoCover, setDemoCover] = useState<{ bytes: Uint8Array; mime: string } | null>(null);
 
     const disc: Disc | null = designMode ? (demoKind === 'album' ? DEMO_ALBUM_DISC : DEMO_MIX_DISC) : liveDisc;
     const coverUrl = designMode ? null : liveCoverUrl;
-    const demoCoverBytes = useMemo(() => (designMode && demoKind === 'album' ? demoCoverPngBytes() : null), [designMode, demoKind]);
 
     const labelDisc = useMemo(
         () => (disc ? discToLabelInfo(disc, designMode ? disc.title : libraryTitle) : null),
@@ -97,22 +97,49 @@ export function LabelStudioDialog({
         return () => URL.revokeObjectURL(pdfUrl);
     }, [pdfUrl]);
 
+    useEffect(() => {
+        if (!designMode || demoKind !== 'album') {
+            setDemoCover(null);
+            return;
+        }
+        let cancelled = false;
+        void loadDemoAlbumCover()
+            .then((cover) => {
+                if (!cancelled) {
+                    setDemoCover(cover);
+                }
+            })
+            .catch((reason: unknown) => {
+                if (!cancelled) {
+                    setDemoCover(null);
+                    setError(reason instanceof Error ? reason.message : 'Could not load demo album cover.');
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [designMode, demoKind]);
+
     const generate = useCallback(
         async (opts: { forceRegenerate?: boolean; forceTypographic?: boolean; theme?: LabelTheme } = {}) => {
             if (!disc) {
                 setError('Connect a disc before generating labels.');
                 return;
             }
+            const useTypographic = opts.forceTypographic ?? forceTypographic;
+            const wantsAlbumDemo = designMode && demoKind === 'album' && !useTypographic;
+            if (wantsAlbumDemo && !demoCover) {
+                return;
+            }
             setLoading(true);
             setError('');
             try {
-                const useTypographic = opts.forceTypographic ?? forceTypographic;
                 const result = await ensureLabelPack({
                     disc,
                     libraryTitle: designMode ? disc.title : libraryTitle,
-                    coverUrl: designMode ? (demoCoverBytes ? 'demo:cover' : null) : coverUrl,
-                    coverBytes: demoCoverBytes,
-                    coverMime: demoCoverBytes ? 'image/png' : null,
+                    coverUrl: designMode ? (demoCover ? DEMO_ALBUM_COVER_URL : null) : coverUrl,
+                    coverBytes: designMode ? demoCover?.bytes ?? null : null,
+                    coverMime: designMode ? demoCover?.mime ?? null : null,
                     theme: opts.theme ?? activeTheme,
                     forceRegenerate: opts.forceRegenerate ?? true,
                     forceTypographic: useTypographic || (designMode && demoKind === 'mix'),
@@ -137,7 +164,7 @@ export function LabelStudioDialog({
                 setLoading(false);
             }
         },
-        [activeTheme, coverUrl, demoCoverBytes, demoKind, designMode, disc, forceTypographic, libraryTitle, theme]
+        [activeTheme, coverUrl, demoCover, demoKind, designMode, disc, forceTypographic, libraryTitle, theme]
     );
 
     useEffect(() => {
@@ -151,8 +178,8 @@ export function LabelStudioDialog({
             setForceTypographic(false);
         }
         void generate({ forceRegenerate: true, forceTypographic: designMode ? demoKind === 'mix' : false });
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- open / designKind drive regeneration
-    }, [open, designMode, demoKind]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- open / designKind / demo cover drive regeneration
+    }, [open, designMode, demoKind, demoCover]);
 
     const downloadArtPdf = () => {
         if (!artPdf) {
@@ -192,9 +219,9 @@ export function LabelStudioDialog({
             const result = await ensureLabelPack({
                 disc,
                 libraryTitle: designMode ? disc.title : libraryTitle,
-                coverUrl: designMode ? (demoCoverBytes ? 'demo:cover' : null) : coverUrl,
-                coverBytes: demoCoverBytes,
-                coverMime: demoCoverBytes ? 'image/png' : null,
+                coverUrl: designMode ? (demoCover ? DEMO_ALBUM_COVER_URL : null) : coverUrl,
+                coverBytes: designMode ? demoCover?.bytes ?? null : null,
+                coverMime: designMode ? demoCover?.mime ?? null : null,
                 theme: activeTheme,
                 forceRegenerate: true,
                 forceTypographic: forceTypographic || artMode === 'typographic',
@@ -245,7 +272,7 @@ export function LabelStudioDialog({
                                         onChange={(e) => setDemoKind(e.target.value as LabelStudioDemoKind)}
                                     >
                                         <MenuItem value="mix">Mix disc (typographic)</MenuItem>
-                                        <MenuItem value="album">Album disc (+ demo art)</MenuItem>
+                                        <MenuItem value="album">Album disc (MusicBrainz cover)</MenuItem>
                                     </Select>
                                 </FormControl>
                             ) : null}
