@@ -1,4 +1,17 @@
-import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb, RGB, StandardFonts } from 'pdf-lib';
+import {
+    PDFDocument,
+    PDFFont,
+    PDFImage,
+    PDFPage,
+    clip,
+    endPath,
+    popGraphicsState,
+    pushGraphicsState,
+    rectangle,
+    rgb,
+    RGB,
+    StandardFonts,
+} from 'pdf-lib';
 import {
     A4LabelLayout,
     ALL_PARTS,
@@ -55,6 +68,7 @@ function drawRegistrationMarks(page: PDFPage, layout: A4LabelLayout) {
     }
 }
 
+/** Cover/crop the image into `box`, clipped so overflow cannot paint neighbouring labels. */
 function fitCoverDraw(
     page: PDFPage,
     image: PDFImage,
@@ -67,7 +81,14 @@ function fitCoverDraw(
     const drawH = ih * scale;
     const x = box.x + (box.width - drawW) / 2;
     const y = box.y + (box.height - drawH) / 2;
+    page.pushOperators(
+        pushGraphicsState(),
+        rectangle(box.x, box.y, box.width, box.height),
+        clip(),
+        endPath()
+    );
     page.drawImage(image, { x, y, width: drawW, height: drawH });
+    page.pushOperators(popGraphicsState());
 }
 
 function truncateToWidth(font: PDFFont, text: string, size: number, maxWidth: number): string {
