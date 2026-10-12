@@ -262,87 +262,90 @@ export function exploitDownloadTracks(
             ])
         );
         await serviceRegistry.netmdFactoryService!.prepareDownload(useSlowerExploit);
-        for (const trackIndex of trackIndexes) {
-            if (trackIndex >= disc.trackCount) {
-                window.alert("This track does not exist. Make sure you've read the instructions on how to use the homebrew mode.");
-                return;
-            }
-            const track = tracks.find(n => n.index === trackIndex)!;
-            dispatch(
-                batchActions([
-                    factoryProgressDialogActions.setDetails({
-                        name: `Transferring track ${trackIndex + 1}`,
-                        units: 'sectors',
-                    }),
-                    factoryProgressDialogActions.setProgress({
-                        current: -1,
-                        total: 0,
-                        additionalInfo: 'Uploading code...',
-                    }),
-                ])
-            );
-
-            let timeout: ReturnType<typeof setTimeout> | null = null;
-
-            let storedBadSectorHandling: null | BadSectorResponse = null;
-
-            let trackData = await serviceRegistry.netmdFactoryService!.exploitDownloadTrack(
-                trackIndex,
-                nerawDownload,
-                ({ total, read, action, sector }: { read: number; total: number; action: 'READ' | 'SEEK' | 'CHUNK'; sector?: string }) => {
-                    if (timeout !== null) clearTimeout(timeout);
-                    timeout = setTimeout(() => {
-                        dispatch(
-                            factoryProgressDialogActions.setProgress({
-                                current: Math.min(read, total),
-                                total: total,
-                                additionalInfo: {
-                                    SEEK: 'Seeking...',
-                                    CHUNK: 'Receiving...',
-                                    READ: `Reading sector ${sector!}...`,
-                                }[action],
-                            })
-                        );
-                    }, 20);
-                },
-                {
-                    shouldCancelImmediately: () => getState().factoryProgressDialog.cancelled,
-                    handleBadSector: async (address: string, count: number, seconds: number) => {
-                        if (sessionStoredBadSectorHandling !== null) return sessionStoredBadSectorHandling;
-                        if (storedBadSectorHandling !== null) return storedBadSectorHandling;
-                        dispatch(
-                            batchActions([
-                                factoryBadSectorDialogActions.setAddress(address),
-                                factoryBadSectorDialogActions.setSeconds(seconds),
-                                factoryBadSectorDialogActions.setCount(count),
-                                factoryBadSectorDialogActions.setVisible(true),
-                            ])
-                        );
-                        const result = await new Promise<{
-                            response: BadSectorResponse;
-                            rememberForTheRestOfDownload: boolean;
-                            rememberForTheRestOfSession: boolean;
-                        }>(res => (badSectorPromise = res));
-                        if (result.rememberForTheRestOfDownload) {
-                            storedBadSectorHandling = result.response;
-                        }
-                        if (result.rememberForTheRestOfSession) {
-                            sessionStoredBadSectorHandling = result.response;
-                        }
-                        return result.response;
-                    },
+        try {
+            for (const trackIndex of trackIndexes) {
+                if (trackIndex >= disc.trackCount) {
+                    window.alert("This track does not exist. Make sure you've read the instructions on how to use the homebrew mode.");
+                    return;
                 }
-            );
-            let filename = createDownloadTrackName(track, trackData.extension);
-            if (convertOutputToWav) {
-                trackData.data = await convertToWAV(trackData, track);
-                filename = filename.slice(0, -3) + 'wav';
+                const track = tracks.find(n => n.index === trackIndex)!;
+                dispatch(
+                    batchActions([
+                        factoryProgressDialogActions.setDetails({
+                            name: `Transferring track ${trackIndex + 1}`,
+                            units: 'sectors',
+                        }),
+                        factoryProgressDialogActions.setProgress({
+                            current: -1,
+                            total: 0,
+                            additionalInfo: 'Uploading code...',
+                        }),
+                    ])
+                );
+
+                let timeout: ReturnType<typeof setTimeout> | null = null;
+
+                let storedBadSectorHandling: null | BadSectorResponse = null;
+
+                let trackData = await serviceRegistry.netmdFactoryService!.exploitDownloadTrack(
+                    trackIndex,
+                    nerawDownload,
+                    ({ total, read, action, sector }: { read: number; total: number; action: 'READ' | 'SEEK' | 'CHUNK'; sector?: string }) => {
+                        if (timeout !== null) clearTimeout(timeout);
+                        timeout = setTimeout(() => {
+                            dispatch(
+                                factoryProgressDialogActions.setProgress({
+                                    current: Math.min(read, total),
+                                    total: total,
+                                    additionalInfo: {
+                                        SEEK: 'Seeking...',
+                                        CHUNK: 'Receiving...',
+                                        READ: `Reading sector ${sector!}...`,
+                                    }[action],
+                                })
+                            );
+                        }, 20);
+                    },
+                    {
+                        shouldCancelImmediately: () => getState().factoryProgressDialog.cancelled,
+                        handleBadSector: async (address: string, count: number, seconds: number) => {
+                            if (sessionStoredBadSectorHandling !== null) return sessionStoredBadSectorHandling;
+                            if (storedBadSectorHandling !== null) return storedBadSectorHandling;
+                            dispatch(
+                                batchActions([
+                                    factoryBadSectorDialogActions.setAddress(address),
+                                    factoryBadSectorDialogActions.setSeconds(seconds),
+                                    factoryBadSectorDialogActions.setCount(count),
+                                    factoryBadSectorDialogActions.setVisible(true),
+                                ])
+                            );
+                            const result = await new Promise<{
+                                response: BadSectorResponse;
+                                rememberForTheRestOfDownload: boolean;
+                                rememberForTheRestOfSession: boolean;
+                            }>(res => (badSectorPromise = res));
+                            if (result.rememberForTheRestOfDownload) {
+                                storedBadSectorHandling = result.response;
+                            }
+                            if (result.rememberForTheRestOfSession) {
+                                sessionStoredBadSectorHandling = result.response;
+                            }
+                            return result.response;
+                        },
+                    }
+                );
+                let filename = createDownloadTrackName(track, trackData.extension);
+                if (convertOutputToWav) {
+                    trackData.data = await convertToWAV(trackData, track);
+                    filename = filename.slice(0, -3) + 'wav';
+                }
+                callback(new Blob([trackData.data]), filename);
+                if (getState().factoryProgressDialog.cancelled) break;
             }
-            callback(new Blob([trackData.data]), filename);
-            if (getState().factoryProgressDialog.cancelled) break;
+        } finally {
+            await serviceRegistry.netmdFactoryService!.finalizeDownload();
+            dispatch(factoryProgressDialogActions.setVisible(false));
         }
-        await serviceRegistry.netmdFactoryService!.finalizeDownload();
-        dispatch(factoryProgressDialogActions.setVisible(false));
     };
 }
 
