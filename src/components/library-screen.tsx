@@ -3,7 +3,6 @@ import Checkbox from '@mui/material/Checkbox';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
 import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
 import { makeStyles } from 'tss-react/mui';
 import { AdaptiveFile, formatTimeFromSeconds } from '../utils';
 import serviceRegistry from '../services/registry';
@@ -45,7 +44,40 @@ const useStyles = makeStyles()(() => ({
             textTransform: 'none',
             fontFamily: deckTokens.fontSans,
             fontWeight: 500,
+            color: deckTokens.muted,
+            '&.Mui-selected': {
+                color: deckTokens.ink,
+            },
         },
+        '& .MuiTabs-indicator': {
+            backgroundColor: deckTokens.accent,
+        },
+    },
+    detailTitle: {
+        fontFamily: deckTokens.fontSans,
+        marginBottom: 4,
+        color: deckTokens.ink,
+        fontWeight: 600,
+        fontSize: 18,
+    },
+    detailMeta: {
+        fontFamily: deckTokens.fontSans,
+        fontSize: 13,
+        color: deckTokens.muted,
+        lineHeight: 1.45,
+    },
+    listMessage: {
+        padding: '16px 12px',
+        fontFamily: deckTokens.fontSans,
+        fontSize: 14,
+        color: deckTokens.ink,
+    },
+    listMessageMeta: {
+        display: 'block',
+        marginTop: 4,
+        fontFamily: deckTokens.fontMono,
+        fontSize: 12,
+        color: deckTokens.muted,
     },
     list: {
         flex: 1,
@@ -179,6 +211,22 @@ const useStyles = makeStyles()(() => ({
     search: {
         '& .MuiInputBase-root': {
             fontFamily: deckTokens.fontSans,
+            color: deckTokens.ink,
+        },
+        '& .MuiInputLabel-root': {
+            color: deckTokens.muted,
+            '&.Mui-focused': {
+                color: deckTokens.accent,
+            },
+        },
+        '& .MuiInput-underline:before': {
+            borderBottomColor: deckTokens.borderHairline,
+        },
+        '& .MuiInput-underline:hover:not(.Mui-disabled):before': {
+            borderBottomColor: deckTokens.ink,
+        },
+        '& .MuiInput-underline:after': {
+            borderBottomColor: deckTokens.accent,
         },
     },
 }));
@@ -327,14 +375,20 @@ export function LibraryScreen({
     const [selected, setSelected] = useState<string[]>([]);
     const [focusFile, setFocusFile] = useState<string | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
     const [coverFailed, setCoverFailed] = useState<Record<string, boolean>>({});
 
     const loadTracks = useCallback(async () => {
-        const [nextTracks, nextPlaylists] = await Promise.all([library.listLibraryTracks(), library.listPlaylists()]);
-        setTracks(nextTracks);
-        setPlaylists(nextPlaylists);
-        setLoadError(null);
+        setLoading(true);
+        try {
+            const [nextTracks, nextPlaylists] = await Promise.all([library.listLibraryTracks(), library.listPlaylists()]);
+            setTracks(nextTracks);
+            setPlaylists(nextPlaylists);
+            setLoadError(null);
+        } finally {
+            setLoading(false);
+        }
     }, [library]);
 
     useEffect(() => {
@@ -345,6 +399,7 @@ export function LibraryScreen({
                     ? 'Downtify is not reachable from this page. Start the embedded Downtify service, then refresh.'
                     : raw
             );
+            setLoading(false);
         });
     }, [loadTracks]);
 
@@ -568,9 +623,9 @@ export function LibraryScreen({
                     <Tab value="tracks" label="Tracks" />
                 </Tabs>
                 {loadError ? (
-                    <Typography variant="body2" color="error">
+                    <p className={classes.listMessage} style={{ color: deckTokens.meterWarn, paddingLeft: 0, paddingRight: 0 }}>
                         {loadError}
-                    </Typography>
+                    </p>
                 ) : null}
                 <TextField
                     className={classes.search}
@@ -676,12 +731,16 @@ export function LibraryScreen({
                                       </div>
                                   </button>
                               ))}
-                        {!loadError && tracks.length === 0 ? (
-                            <div className={classes.row}>
-                                <div className={classes.rowBody}>
-                                    <span className={classes.rowTitle}>Nothing in the Downtify library yet.</span>
-                                    <span className={classes.rowMeta}>Queue a download, then refresh here when it finishes.</span>
-                                </div>
+                        {loading ? (
+                            <div className={classes.listMessage} role="status" aria-live="polite">
+                                Loading library…
+                                <span className={classes.listMessageMeta}>Fetching tracks and playlists from Downtify.</span>
+                            </div>
+                        ) : null}
+                        {!loading && !loadError && tracks.length === 0 ? (
+                            <div className={classes.listMessage}>
+                                Nothing in the Downtify library yet.
+                                <span className={classes.listMessageMeta}>Queue a download, then refresh here when it finishes.</span>
                             </div>
                         ) : null}
                         {(showingTracks ? visibleTracks.length : groups.length) > LIBRARY_LIST_LIMIT ? (
@@ -708,28 +767,26 @@ export function LibraryScreen({
                             <div className={classes.detailArtEmpty}>No artwork</div>
                         )}
                         <div>
-                            <Typography variant="h6" component="h2" style={{ fontFamily: deckTokens.fontSans, marginBottom: 4 }}>
-                                {focusedTrack?.title || focusedGroup?.name || 'Select a title'}
-                            </Typography>
+                            <h2 className={classes.detailTitle}>{focusedTrack?.title || focusedGroup?.name || 'Select a title'}</h2>
                             {focusedTrack ? (
-                                <Typography variant="body2" color="textSecondary">
+                                <p className={classes.detailMeta}>
                                     {[focusedTrack.artist || null, focusedTrack.albumArtist && focusedTrack.albumArtist !== focusedTrack.artist ? `Album artist: ${focusedTrack.albumArtist}` : null, focusedTrack.album || null]
                                         .filter(Boolean)
                                         .join(' · ')}
-                                </Typography>
+                                </p>
                             ) : focusedGroup ? (
-                                <Typography variant="body2" color="textSecondary">
+                                <p className={classes.detailMeta}>
                                     {focusedGroup.count} track{focusedGroup.count === 1 ? '' : 's'}
                                     {showingTracks && durationSum > 0 ? ` · ${formatTimeFromSeconds(durationSum, false)}` : ''}
-                                </Typography>
+                                </p>
                             ) : null}
                             {focusedTrack && focusedTrack.duration > 0 ? (
-                                <Typography variant="body2" color="textSecondary">
+                                <p className={classes.detailMeta}>
                                     {formatTimeFromSeconds(focusedTrack.duration, false)}
                                     {showingTracks && visibleTracks.length > 1 && durationSum > 0
                                         ? ` · ${visibleTracks.length} tracks · ${formatTimeFromSeconds(durationSum, false)} total`
                                         : ''}
-                                </Typography>
+                                </p>
                             ) : null}
                         </div>
                         {metaChips.length > 0 ? (
@@ -773,7 +830,7 @@ export function LibraryScreen({
                 </div>
             </DeckPanel>
             <StatusStrip
-                left={<span>{tracks.length} library tracks</span>}
+                left={<span>{loading ? 'Loading…' : `${tracks.length} library tracks`}</span>}
                 right={
                     <>
                         <span>{selected.length} selected</span>

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
 import { makeStyles } from 'tss-react/mui';
 import { DowntifyLibraryService, DowntifyQueueJob, queueSongId } from '../services/library/downtify-library';
 import { getDowntifyLibrary } from '../services/library/downtify-client';
@@ -27,6 +26,22 @@ const useStyles = makeStyles()(() => ({
         flex: '1 1 280px',
         '& .MuiInputBase-root': {
             fontFamily: deckTokens.fontSans,
+            color: deckTokens.ink,
+        },
+        '& .MuiInputLabel-root': {
+            color: deckTokens.muted,
+            '&.Mui-focused': {
+                color: deckTokens.accent,
+            },
+        },
+        '& .MuiInput-underline:before': {
+            borderBottomColor: deckTokens.borderHairline,
+        },
+        '& .MuiInput-underline:hover:not(.Mui-disabled):before': {
+            borderBottomColor: deckTokens.ink,
+        },
+        '& .MuiInput-underline:after': {
+            borderBottomColor: deckTokens.accent,
         },
     },
     toggleRow: {
@@ -34,6 +49,41 @@ const useStyles = makeStyles()(() => ({
         alignItems: 'center',
         gap: 8,
         flexWrap: 'wrap',
+        '& .MuiFormControlLabel-label': {
+            fontFamily: deckTokens.fontSans,
+            fontSize: 13,
+            color: deckTokens.ink,
+        },
+        '& .MuiSwitch-switchBase.Mui-checked': {
+            color: deckTokens.accent,
+        },
+        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+            backgroundColor: deckTokens.accent,
+        },
+    },
+    emptyMessage: {
+        padding: '16px 12px',
+        fontFamily: deckTokens.fontSans,
+        fontSize: 14,
+        color: deckTokens.ink,
+        gridColumn: '1 / -1',
+    },
+    emptyMessageMeta: {
+        display: 'block',
+        marginTop: 4,
+        fontFamily: deckTokens.fontMono,
+        fontSize: 12,
+        color: deckTokens.muted,
+    },
+    bodyText: {
+        fontFamily: deckTokens.fontSans,
+        fontSize: 13,
+        color: deckTokens.ink,
+    },
+    captionText: {
+        fontFamily: deckTokens.fontMono,
+        fontSize: 11,
+        color: deckTokens.muted,
     },
     table: {
         display: 'flex',
@@ -263,6 +313,7 @@ export function QueueScreen() {
     const [youtubeUrls, setYoutubeUrls] = useState<Record<string, string>>({});
     const [busyId, setBusyId] = useState<string | null>(null);
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    const [loading, setLoading] = useState(true);
 
     const refresh = useCallback(async () => {
         setJobs(await library.getQueue());
@@ -270,20 +321,29 @@ export function QueueScreen() {
 
     useEffect(() => {
         let cancelled = false;
-        const load = () => {
-            refresh().catch((err: unknown) => {
-                if (!cancelled) {
-                    const raw = err instanceof Error ? err.message : 'Could not read the Downtify queue';
-                    setNotice(
-                        /<!DOCTYPE|Unexpected token/i.test(raw)
-                            ? 'Downtify is not reachable from this page. Start the embedded Downtify service, then refresh.'
-                            : raw
-                    );
-                }
-            });
+        const load = (isInitial: boolean) => {
+            refresh()
+                .then(() => {
+                    if (!cancelled) {
+                        setLoading(false);
+                    }
+                })
+                .catch((err: unknown) => {
+                    if (!cancelled) {
+                        const raw = err instanceof Error ? err.message : 'Could not read the Downtify queue';
+                        setNotice(
+                            /<!DOCTYPE|Unexpected token/i.test(raw)
+                                ? 'Downtify is not reachable from this page. Start the embedded Downtify service, then refresh.'
+                                : raw
+                        );
+                        if (isInitial) {
+                            setLoading(false);
+                        }
+                    }
+                });
         };
-        load();
-        const timer = window.setInterval(load, 3000);
+        load(true);
+        const timer = window.setInterval(() => load(false), 3000);
         return () => {
             cancelled = true;
             window.clearInterval(timer);
@@ -417,16 +477,12 @@ export function QueueScreen() {
                                             const artist = songArtist(job);
                                             return (
                                                 <div className={classes.childRow} key={id}>
-                                                    <Typography variant="body2">
+                                                    <span className={classes.bodyText}>
                                                         {songTitle(job)}
                                                         {artist ? ` — ${artist}` : ''} · {statusLabel(job.status)}
                                                         {job.status === 'downloading' || job.status === 'queued' ? ` ${Math.round(job.progress)}%` : ''}
-                                                    </Typography>
-                                                    {job.message ? (
-                                                        <Typography variant="caption" color="textSecondary">
-                                                            {job.message}
-                                                        </Typography>
-                                                    ) : null}
+                                                    </span>
+                                                    {job.message ? <span className={classes.captionText}>{job.message}</span> : null}
                                                     {job.status === 'error' ? (
                                                         <>
                                                             <HardwareButton compact padded disabled={busyId === id} onClick={() => run(id, () => library.retryDownload(job.song))}>
@@ -467,11 +523,7 @@ export function QueueScreen() {
                                             const id = queueSongId(job.song) || `${songTitle(job)}-${index}`;
                                             return (
                                                 <div className={classes.childRow} key={id}>
-                                                    {job.message ? (
-                                                        <Typography variant="caption" color="textSecondary">
-                                                            {job.message}
-                                                        </Typography>
-                                                    ) : null}
+                                                    {job.message ? <span className={classes.captionText}>{job.message}</span> : null}
                                                     <HardwareButton compact padded disabled={busyId === id} onClick={() => run(id, () => library.retryDownload(job.song))}>
                                                         Retry
                                                     </HardwareButton>
@@ -505,11 +557,20 @@ export function QueueScreen() {
                             </div>
                         );
                     })}
-                    {aggregated.length === 0 && !notice ? (
+                    {loading ? (
                         <div className={classes.row}>
-                            <Typography variant="body2" color="textSecondary">
-                                The queue is empty. Paste a URL above to start a download.
-                            </Typography>
+                            <div className={classes.emptyMessage} role="status" aria-live="polite">
+                                Loading queue…
+                                <span className={classes.emptyMessageMeta}>Checking Downtify for active downloads.</span>
+                            </div>
+                        </div>
+                    ) : null}
+                    {!loading && aggregated.length === 0 && !notice ? (
+                        <div className={classes.row}>
+                            <div className={classes.emptyMessage}>
+                                The queue is empty.
+                                <span className={classes.emptyMessageMeta}>Paste a URL above to start a download.</span>
+                            </div>
                         </div>
                     ) : null}
                 </div>

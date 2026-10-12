@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, lazy, Suspense, useEffect, useState } from 'react';
-import { belowDesktop, forAnyDesktop, forWideDesktop, useDispatch, useShallowEqualSelector, useThemeDetector } from '../frontend-utils';
+import React, { useCallback, lazy, Suspense, useEffect, useState } from 'react';
+import { belowDesktop, forAnyDesktop, forWideDesktop, useDispatch, useShallowEqualSelector } from '../frontend-utils';
 
 import CssBaseline from '@mui/material/CssBaseline';
 import Backdrop from '@mui/material/Backdrop';
@@ -204,41 +204,6 @@ const themeCommons = {
     },
 } as const;
 
-const darkTheme = createTheme({
-    palette: {
-        mode: 'dark',
-        primary: {
-            light: '#6ec6ff',
-            main: '#2196f3',
-            dark: '#0069c0',
-            contrastText: '#fff',
-        },
-        secondary: {
-            light: '#ff4081',
-            main: '#f50057',
-            dark: '#c51162',
-        },
-        background: {
-            default: '#303030',
-            paper: '#424242',
-        },
-        action: {
-            active: '#fff',
-            hover: 'rgba(255, 255, 255, 0.08)',
-            hoverOpacity: 0.08,
-            selected: 'rgba(255, 255, 255, 0.16)',
-            selectedOpacity: 0.16,
-            disabled: 'rgba(255, 255, 255, 0.3)',
-            disabledBackground: 'rgba(255, 255, 255, 0.12)',
-            disabledOpacity: 0.38,
-            focus: 'rgba(255, 255, 255, 0.12)',
-            focusOpacity: 0.12,
-            activatedOpacity: 0.24,
-        },
-    },
-    ...themeCommons,
-});
-
 const lightTheme = createTheme({
     palette: {
         mode: 'light',
@@ -421,26 +386,16 @@ const InternalApp = () => {
 };
 
 const App = () => {
-    const { colorTheme, vintageMode } = useShallowEqualSelector((state) => state.appState);
-    const systemIsDarkTheme = useThemeDetector();
-
-    const theme = useMemo(() => {
-        switch (colorTheme) {
-            case 'light':
-                return lightTheme;
-            case 'dark':
-                return darkTheme;
-            case 'system':
-                return systemIsDarkTheme ? darkTheme : lightTheme;
-        }
-    }, [systemIsDarkTheme, colorTheme]);
+    const { vintageMode } = useShallowEqualSelector((state) => state.appState);
 
     if (vintageMode) {
         return <W95App />;
     }
 
+    // Industrial deck is a light cream chassis; dark/system MUI palettes paint light
+    // text and blue accents on that surface and wash out the track list.
     return (
-        <ThemeProvider theme={theme}>
+        <ThemeProvider theme={lightTheme}>
             <InternalApp />
         </ThemeProvider>
     );
