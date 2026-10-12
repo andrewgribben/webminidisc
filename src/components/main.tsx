@@ -90,7 +90,6 @@ import { PanicDialog } from './panic-dialog';
 import { ConvertDialog } from './convert-dialog';
 import { AboutDialog } from './about-dialog';
 import { DumpDialog } from './dump-dialog';
-import { TopMenu } from './topmenu';
 import Checkbox from '@mui/material/Checkbox';
 import Button from '@mui/material/Button';
 import { W95Main } from './win95/main';
@@ -106,7 +105,6 @@ import { FactoryModeBadSectorDialog } from './factory/factory-bad-sector-dialog'
 import { DiscProtectedDialog } from './disc-protected-dialog';
 import { ContextMenu } from './context-menu';
 import { LocalLibraryDialog } from './local-library';
-import { DowntifyBar } from './downtify-bar';
 import { MatchAlbumDialog } from './match-album-dialog';
 import { LabelStudioDialog } from './label-studio-dialog';
 import { DowntifyLibraryService } from '../services/library/downtify-library';
@@ -816,27 +814,17 @@ export const Main = (props: {}) => {
         <React.Fragment>
             <Box className={classes.deckRoot} {...getRootProps()} id="main">
                 <input {...getInputProps()} />
-                <header className={classes.brandBar}>
-                    <div className={classes.brandMark}>
-                        <h1 className={classes.brandName}>
-                            Web <span>MiniDisc</span> Pro
-                        </h1>
-                        <span className={classes.brandMode}>Deck</span>
-                    </div>
+                {flushable ? (
                     <div className={classes.brandMeta}>
-                        <span className={classes.deviceLabel}>{deviceName || 'Loading…'}</span>
-                        {flushable ? (
-                            <Tooltip title="Commit changes">
-                                <span>
-                                    <HardwareButton compact aria-label="Commit changes" onClick={handleFlush}>
-                                        <DoneIcon fontSize="small" />
-                                    </HardwareButton>
-                                </span>
-                            </Tooltip>
-                        ) : null}
-                        <TopMenu tracksSelected={selected} />
+                        <Tooltip title="Commit changes">
+                            <span>
+                                <HardwareButton compact aria-label="Commit changes" onClick={handleFlush}>
+                                    <DoneIcon fontSize="small" />
+                                </HardwareButton>
+                            </span>
+                        </Tooltip>
                     </div>
-                </header>
+                ) : null}
 
                 <div className={classes.deckGrid}>
                     <div className={classes.artCol}>
@@ -1156,10 +1144,6 @@ export const Main = (props: {}) => {
                     </div>
                 </div>
 
-                <div className={classes.secondaryBar}>
-                    <DowntifyBar onUseFiles={setUploadedFiles} />
-                </div>
-
                 <StatusStrip
                     left={
                         <>
@@ -1198,7 +1182,7 @@ export const Main = (props: {}) => {
                     Upload from this machine
                 </MenuItem>
                 <MenuItem onClick={handleOpenLocalLibrary}>
-                    {serviceRegistry.libraryService instanceof DowntifyLibraryService ? 'Upload from Downtify' : 'Upload from library'}
+                    {serviceRegistry.libraryService instanceof DowntifyLibraryService ? 'Open Library' : 'Upload from library'}
                 </MenuItem>
             </Menu>
 

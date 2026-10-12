@@ -1,4 +1,4 @@
-import React, { useMemo, lazy, Suspense, useEffect } from 'react';
+import React, { useCallback, useMemo, lazy, Suspense, useEffect, useState } from 'react';
 import { belowDesktop, forAnyDesktop, forWideDesktop, useDispatch, useShallowEqualSelector, useThemeDetector } from '../frontend-utils';
 
 import CssBaseline from '@mui/material/CssBaseline';
@@ -16,7 +16,12 @@ import { validateAndLoadEncoders } from '../redux/actions';
 import { EncoderDownloadDialog } from './encoder-download-dialog';
 import { LabelStudioDialog } from './label-studio-dialog';
 import { isLabelDesignMode } from '../services/labels/demo-disc';
-import { deckTokens } from './deck-ui';
+import { AdaptiveFile } from '../utils';
+import { actions as convertDialogActions } from '../redux/convert-dialog-feature';
+import { ConvertDialog } from './convert-dialog';
+import { LibraryScreen } from './library-screen';
+import { QueueScreen } from './queue-screen';
+import { DeckNavBar, deckTokens } from './deck-ui';
 
 const Toc = lazy(() => import('./factory/factory'));
 const Welcome = lazy(() => import('./welcome'));
@@ -301,17 +306,22 @@ const lightTheme = createTheme({
 });
 
 const InternalApp = () => {
-    const { mainView, loading, pageFullHeight, pageFullWidth } = useShallowEqualSelector((state) => state.appState);
-    const { deviceCapabilities } = useShallowEqualSelector((state) => state.main);
+    const { mainView, shellSection, loading, pageFullHeight, pageFullWidth } = useShallowEqualSelector((state) => state.appState);
+    const { deviceCapabilities, deviceName } = useShallowEqualSelector((state) => state.main);
     const { classes, cx } = useStyles();
     const dispatch = useDispatch();
     const [labelDesignOpen, setLabelDesignOpen] = React.useState(() => isLabelDesignMode());
-    const isDeckMain = mainView === 'MAIN';
+    const [libraryEncodeFiles, setLibraryEncodeFiles] = useState<(File | AdaptiveFile)[]>([]);
+    const showShellNav = mainView === 'WELCOME' || mainView === 'MAIN';
+    const isDeckShell = showShellNav;
+    const showNowPlaying = shellSection === 'nowPlaying';
+    const showLibrary = shellSection === 'library';
+    const showQueue = shellSection === 'queue';
 
     // At init, connect to server and check for encoders.
     useEffect(() => {
         dispatch(validateAndLoadEncoders(true));
-    }, []);
+    }, [dispatch]);
 
     useEffect(() => {
         if (isLabelDesignMode()) {
@@ -323,6 +333,16 @@ const InternalApp = () => {
         document.body.classList.add('deck-theme');
         return () => document.body.classList.remove('deck-theme');
     }, []);
+
+    const handleLibraryEncode = useCallback(
+        (files: AdaptiveFile[]) => {
+            setLibraryEncodeFiles(files);
+            if (files.length > 0) {
+                dispatch(convertDialogActions.setVisible(true));
+            }
+        },
+        [dispatch]
+    );
 
     return (
         <React.Fragment>
@@ -337,22 +357,28 @@ const InternalApp = () => {
             >
                 <main
                     className={cx(classes.layout, {
-                        [classes.layoutFullWidth]: pageFullWidth && !isDeckMain,
-                        [classes.layoutDeck]: isDeckMain,
+                        [classes.layoutFullWidth]: pageFullWidth && !isDeckShell,
+                        [classes.layoutDeck]: isDeckShell,
                     })}
                 >
                     <Paper
-                        elevation={isDeckMain ? 0 : 1}
+                        elevation={isDeckShell ? 0 : 1}
                         className={cx(classes.paper, {
-                            [classes.paperShowsList]: !isDeckMain && deviceCapabilities.includes(0 /*Capability.listContent*/),
+                            [classes.paperShowsList]: !isDeckShell && deviceCapabilities.includes(0 /*Capability.listContent*/),
                             [classes.paperFullHeight]: pageFullHeight,
-                            [classes.paperDeck]: isDeckMain,
+                            [classes.paperDeck]: isDeckShell,
                         })}
                     >
-                        {mainView === 'WELCOME' ? <Welcome /> : null}
-                        {mainView === 'MAIN' ? <Main /> : null}
+                        {showShellNav ? <DeckNavBar deviceName={mainView === 'MAIN' ? deviceName : undefined} /> : null}
                         {mainView === 'FACTORY' ? <Toc /> : null}
+                        {mainView !== 'FACTORY' && showNowPlaying && mainView === 'WELCOME' ? <Welcome /> : null}
+                        {mainView !== 'FACTORY' && showNowPlaying && mainView === 'MAIN' ? <Main /> : null}
+                        {mainView !== 'FACTORY' && showLibrary ? (
+                            <LibraryScreen onUseFiles={handleLibraryEncode} canEncode={mainView === 'MAIN'} />
+                        ) : null}
+                        {mainView !== 'FACTORY' && showQueue ? <QueueScreen /> : null}
                         {mainView === 'MAIN' ? <FilePlayer /> : null}
+                        {mainView === 'MAIN' && (showLibrary || showQueue) ? <ConvertDialog files={libraryEncodeFiles} /> : null}
                     </Paper>
                     <Typography variant="body2" color="textSecondary" className={classes.copyrightTypography}>
                         {'© '}

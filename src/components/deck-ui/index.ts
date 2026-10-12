@@ -12,3 +12,5 @@ export { StatusStrip } from './StatusStrip';
 export type { StatusStripProps } from './StatusStrip';
 export { DeckActionTile } from './DeckActionTile';
 export type { DeckActionTileProps } from './DeckActionTile';
+export { DeckNavBar } from './DeckNavBar';
+export type { DeckNavBarProps } from './DeckNavBar';

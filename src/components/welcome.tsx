@@ -18,7 +18,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
-import { TopMenu } from './topmenu';
 import ChromeIconPath from '../images/chrome-icon.svg';
 import { W95Welcome } from './win95/welcome';
 
@@ -36,7 +35,6 @@ import { OtherDeviceDialog } from './other-device-dialog';
 import { SettingsDialog } from './settings-dialog';
 import { ChangelogDialog } from './changelog-dialog';
 import { AboutDialog } from './about-dialog';
-import { DowntifyBar } from './downtify-bar';
 
 import { actions as otherDialogActions } from '../redux/other-device-feature';
 import { actions as appActions } from '../redux/app-feature';
@@ -205,13 +203,7 @@ export const Welcome = (props: {}) => {
 
     return (
         <React.Fragment>
-            <Box className={classes.headBox}>
-                <Typography component="h1" variant="h4">
-                    Web MiniDisc Pro
-                </Typography>
-                <TopMenu />
-            </Box>
-            <Typography component="h2" variant="body2">
+            <Typography component="h2" variant="body2" align="center">
                 Brings NetMD Devices to the Web
             </Typography>
             <Box className={classes.main}>
@@ -240,7 +232,6 @@ export const Welcome = (props: {}) => {
                             >
                                 <FormHelperText>{pairingMessage}</FormHelperText>
                             </FormControl>
-                            <DowntifyBar />
                             {!window.native?.interface && (
                                 <Tooltip
                                     title={

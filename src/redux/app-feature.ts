@@ -7,8 +7,11 @@ import { savePreference, loadPreference } from '../utils';
 
 export type Views = 'WELCOME' | 'MAIN' | 'FACTORY';
 
+export type ShellSection = 'nowPlaying' | 'library' | 'queue';
+
 export interface AppState {
     mainView: Views;
+    shellSection: ShellSection;
     loading: boolean;
     pairingFailed: boolean;
     pairingMessage: string;
@@ -48,6 +51,7 @@ const defaultDowntifyLibraryConfig =
 export const buildInitialState = (): AppState => {
     return {
         mainView: 'WELCOME',
+        shellSection: 'nowPlaying',
         loading: false,
         pairingFailed: false,
         pairingMessage: ``,
@@ -91,6 +95,9 @@ export const slice = createSlice({
         setMainView: (state, action: PayloadAction<Views>) => {
             // CAVEAT: There's a middleware that resets the state when mainView is set to WELCOME
             state.mainView = action.payload;
+        },
+        setShellSection: (state, action: PayloadAction<ShellSection>) => {
+            state.shellSection = action.payload;
         },
         setLoading: (state, action: PayloadAction<boolean>) => {
             state.loading = action.payload;
