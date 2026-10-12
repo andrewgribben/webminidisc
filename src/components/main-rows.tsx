@@ -344,7 +344,7 @@ export function GroupRow({ group, usesHimdTracks, onRename, onDelete, onSelect, 
         <TableRow
             hover
             selected={isSelected}
-            className={cx({ [classes.groupHeadRow]: deviceCapabilities.metadataEdit, [classes.rowClass]: true })}
+            className={cx({ [classes.groupHead]: deviceCapabilities.metadataEdit, [classes.rowClass]: true })}
             onDoubleClick={handleRename}
             onClick={handleSelect}
         >
