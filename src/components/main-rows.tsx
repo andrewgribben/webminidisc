@@ -16,17 +16,22 @@ import { Track, Group, getDefaultCodec } from '../services/interfaces/netmd';
 import { formatTimeFromSeconds, secondsToHumanReadable } from '../utils';
 
 import serviceRegistry from '../services/registry';
-import { alpha, lighten } from '@mui/material';
 import { useDeviceCapabilities } from '../frontend-utils';
+import { deckTokens } from './deck-ui';
 
 const useStyles = makeStyles<
     void,
     'indexCell' | 'titleCell' | 'playButtonInTrackList' | 'trackIndex' | 'deleteGroupButton' | 'groupFolderIcon'
 >()((theme, _params, classes) => ({
     currentTrackRow: {
-        color: theme.palette.primary.main,
+        color: deckTokens.accent,
+        fontWeight: 700,
+        boxShadow: `inset 3px 0 0 0 ${deckTokens.accent}`,
         '& > td': {
             color: 'inherit',
+            fontWeight: 'inherit',
+            borderTop: `1px solid rgba(255, 77, 0, 0.35)`,
+            borderBottom: `1px solid rgba(255, 77, 0, 0.35)`,
         },
     },
     inGroupTrackRow: {
@@ -42,6 +47,10 @@ const useStyles = makeStyles<
     },
     trackRow: {
         userSelect: 'none',
+        color: deckTokens.ink,
+        '& > td': {
+            color: 'inherit',
+        },
         '&:hover': {
             [`& .${classes.playButtonInTrackList}`]: {
                 display: 'inline-flex',
@@ -58,7 +67,7 @@ const useStyles = makeStyles<
         marginLeft: theme.spacing(-0.5),
     },
     formatBadge: {
-        color: 'white',
+        color: '#fff',
         height: theme.spacing(2.5),
         zIndex: 1,
         flexWrap: 'wrap',
@@ -68,13 +77,13 @@ const useStyles = makeStyles<
         alignItems: 'center',
         fontWeight: 500,
         alignContent: 'center',
-        borderRadius: '10px',
+        borderRadius: 2,
         flexDirection: 'row',
         justifyContent: 'center',
-        backgroundColor: theme.palette.primary.main,
+        backgroundColor: deckTokens.ink,
         position: 'static',
         display: 'inline-flex',
-        border: `2px solid ${theme.palette.background.paper}`,
+        border: `1.5px solid ${deckTokens.border}`,
         padding: '0 4px',
         verticalAlign: 'middle',
         width: theme.spacing(4.5),
@@ -88,14 +97,15 @@ const useStyles = makeStyles<
         verticalAlign: 'middle',
         userSelect: 'none',
         marginRight: theme.spacing(0.5),
-        color: theme.palette.text.secondary,
+        color: deckTokens.muted,
     },
     durationCell: {
         whiteSpace: 'nowrap',
+        color: deckTokens.ink,
     },
     durationCellSecondary: {
         whiteSpace: 'nowrap',
-        color: theme.palette.text.secondary,
+        color: deckTokens.muted,
     },
     durationCellTime: {
         verticalAlign: 'middle',
@@ -104,6 +114,7 @@ const useStyles = makeStyles<
         overflow: 'hidden',
         maxWidth: '40ch',
         textOverflow: 'ellipsis',
+        color: 'inherit',
         // whiteSpace: 'nowrap',
     },
     deleteGroupButton: {
@@ -113,6 +124,7 @@ const useStyles = makeStyles<
         whiteSpace: 'nowrap',
         paddingRight: 0,
         width: theme.spacing(4),
+        color: 'inherit',
     },
     trackIndex: {
         display: 'inline-block',
@@ -122,14 +134,19 @@ const useStyles = makeStyles<
     dragHandle: {
         width: 20,
         padding: `${theme.spacing(0.5)} 0 0 0`,
+        color: deckTokens.muted,
     },
     dragHandleEmpty: {
         width: 20,
         padding: `${theme.spacing(0.5)} 0 0 0`,
     },
     groupFolderIcon: {},
-    groupHeadRow: {
+    groupHead: {
         userSelect: 'none',
+        color: deckTokens.ink,
+        '& > td': {
+            color: 'inherit',
+        },
         '&:hover': {
             [`& .${classes.deleteGroupButton}`]: {
                 display: 'inline-flex',
@@ -140,22 +157,15 @@ const useStyles = makeStyles<
         },
     },
     rowClass: {
-        '&.Mui-selected':
-            theme.palette.mode === 'light'
-                ? {
-                      backgroundColor: lighten(theme.palette.secondary.main, 0.85),
-                      '&:hover': {
-                          backgroundColor: lighten(theme.palette.secondary.main, 0.85),
-                      },
-                  }
-                : {
-                      backgroundColor: alpha(theme.palette.secondary.main, 0.16),
-                      '&:hover': {
-                          backgroundColor: alpha(theme.palette.secondary.main, 0.16),
-                      },
-                  },
+        color: deckTokens.ink,
+        '&.Mui-selected': {
+            backgroundColor: 'rgba(255, 77, 0, 0.12)',
+            '&:hover': {
+                backgroundColor: 'rgba(255, 77, 0, 0.16)',
+            },
+        },
         '&:hover': {
-            backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05))',
+            backgroundColor: deckTokens.surfaceMuted,
         },
     },
     mockRow: {
@@ -257,7 +267,7 @@ export function TrackRow({
             })}
         >
             <TableCell className={classes.dragHandle} {...draggableProvided.dragHandleProps} onClick={(event) => event.stopPropagation()}>
-                <DragIndicator fontSize="small" color="disabled" />
+                <DragIndicator fontSize="small" htmlColor={deckTokens.muted} />
             </TableCell>
             <TableCell className={classes.indexCell}>
                 <span className={classes.trackIndex}>{track.index + 1}</span>
@@ -334,7 +344,7 @@ export function GroupRow({ group, usesHimdTracks, onRename, onDelete, onSelect, 
         <TableRow
             hover
             selected={isSelected}
-            className={cx({ [classes.groupHeadRow]: deviceCapabilities.metadataEdit, [classes.rowClass]: true })}
+            className={cx({ [classes.groupHead]: deviceCapabilities.metadataEdit, [classes.rowClass]: true })}
             onDoubleClick={handleRename}
             onClick={handleSelect}
         >

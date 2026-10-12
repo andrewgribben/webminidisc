@@ -1,3 +1,18 @@
+:root {
+    --deck-surface: #F7F5F0;
+    --deck-surface-muted: #EBE8E2;
+    --deck-ink: #111111;
+    --deck-muted: #6B6760;
+    --deck-accent: #FF4D00;
+    --deck-accent-hover: #E64500;
+    --deck-border: #111111;
+    --deck-lcd-bg: #9BA86F;
+    --deck-lcd-ink: #1A2210;
+    --deck-meter-track: #D9D4CA;
+    --deck-font-sans: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+    --deck-font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
 body, html {
     height: 100%;
     width: 100%;
@@ -7,6 +22,14 @@ body, html {
 
 #root {
     height: 100%;
+}
+
+body.deck-theme {
+    background:
+        radial-gradient(ellipse 70% 40% at 10% 0%, rgba(255, 77, 0, 0.08), transparent 55%),
+        linear-gradient(180deg, #e4e0d8, var(--deck-surface-muted) 45%, #ddd8ce);
+    color: var(--deck-ink);
+    font-family: var(--deck-font-sans);
 }
 
 div {
