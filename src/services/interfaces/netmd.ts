@@ -57,6 +57,7 @@ import {
     MonoSPUpload,
     DisableDiscDetection,
     EnterServiceMode,
+    USBCodeExecution,
 } from 'netmd-exploits';
 import netmdExploits from 'netmd-exploits';
 import netmdTocmanip from 'netmd-tocmanip';
@@ -921,7 +922,14 @@ class NetMDFactoryUSBService implements NetMDFactoryService {
 
     @asyncMutex
     async finalizeDownload(): Promise<void> {
-        if (this.atracDownloader) await this.exploitStateManager.unload(this.atracDownloader);
+        if (this.atracDownloader) {
+            await this.exploitStateManager.unload(this.atracDownloader);
+            this.atracDownloader = undefined;
+        }
+        // ATRAC recovery pulls in USBCodeExecution, which patches the device's USB
+        // handlers. Leaving that loaded after ripping breaks normal NetMD TOC writes
+        // (e.g. Apply New Titles after song recognition) and can disconnect the device.
+        await this.exploitStateManager.unload(USBCodeExecution);
     }
 
     @asyncMutex
