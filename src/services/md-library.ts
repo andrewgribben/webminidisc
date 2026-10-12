@@ -100,6 +100,10 @@ export function libraryAssetUrl(path: string | null | undefined): string | null 
     if (!path) {
         return null;
     }
+    // Already rewritten (e.g. Redux coverUrl) — do not prefix /md-library twice.
+    if (path === libraryRoot || path.startsWith(`${libraryRoot}/`)) {
+        return path;
+    }
     if (path.startsWith('http://')) {
         // MusicBrainz cover art is served over HTTP. The page is HTTPS, so the image has to use HTTPS.
         const httpsUrl = `https://${path.slice('http://'.length)}`;

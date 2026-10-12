@@ -280,7 +280,9 @@ export function LabelStudioDialog({
                                 <strong>Source:</strong>{' '}
                                 {artMode === 'album'
                                     ? 'Saved album art (MusicBrainz / library)'
-                                    : 'Typographic (mix disc — no album art)'}
+                                    : coverUrl
+                                      ? 'Typographic (album art available — toggle off below to use it)'
+                                      : 'Typographic (mix disc — no album art)'}
                             </Typography>
                             <Typography variant="subtitle1">{labelDisc?.title}</Typography>
                             {labelDisc?.artist ? (
