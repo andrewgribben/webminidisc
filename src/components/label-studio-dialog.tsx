@@ -16,14 +16,16 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import DownloadIcon from '@mui/icons-material/Download';
 import JSZip from 'jszip';
-import { useShallowEqualSelector } from '../frontend-utils';
+import { useDispatch, useShallowEqualSelector } from '../frontend-utils';
 import { downloadBlob, formatTimeFromSeconds, getTracks } from '../utils';
 import { Disc } from '../services/interfaces/netmd';
 import { ALL_PARTS, LabelPartId, discToLabelInfo, ensureLabelPack } from '../services/labels/label-pack';
 import { FACE_CUT, EDGE_CUT, BOX_CUT } from '../services/labels/a4-layout';
 import { DEFAULT_LABEL_THEME, LABEL_THEMES, customTheme } from '../services/labels/themes';
 import { DEMO_ALBUM_COVER_URL, DEMO_ALBUM_DISC, DEMO_MIX_DISC, loadDemoAlbumCover } from '../services/labels/demo-disc';
+import { generateTitleCover } from '../services/labels/generate-title-cover';
 import { LabelArtMode, LabelTheme } from '../services/labels/types';
+import { saveGeneratedAlbumArt } from '../redux/disc-library-actions';
 
 function asBlobPart(bytes: Uint8Array): BlobPart {
     return bytes.slice().buffer as ArrayBuffer;
@@ -61,6 +63,7 @@ export function LabelStudioDialog({
     /** When true, use dummy disc data (no NetMD). Open via ?labels=design */
     designMode?: boolean;
 }) {
+    const dispatch = useDispatch();
     const liveDisc = useShallowEqualSelector((state) => state.main.disc);
     const liveCoverUrl = useShallowEqualSelector((state) => state.discLibrary.coverUrl);
     const libraryTitle = useShallowEqualSelector((state) => state.discLibrary.title);
@@ -89,6 +92,43 @@ export function LabelStudioDialog({
     const trackCount = disc ? getTracks(disc).length : 0;
 
     const activeTheme = theme.id === 'custom' ? customTheme(customBg, customText) : theme;
+
+    const persistTitleCover = useCallback(
+        async (info: NonNullable<typeof labelDisc>, coverTheme: LabelTheme): Promise<string | null> => {
+            const cover = await generateTitleCover(info, coverTheme);
+            let result = await dispatch(
+                saveGeneratedAlbumArt({
+                    bytes: cover.bytes,
+                    mime: cover.mime,
+                    albumTitle: info.title,
+                })
+            );
+            if (result.status === 'needsConfirm') {
+                const confirmed = window.confirm(
+                    'Replace the existing album art with a title-based cover using the current theme?'
+                );
+                if (!confirmed) {
+                    return 'Album art left unchanged';
+                }
+                result = await dispatch(
+                    saveGeneratedAlbumArt({
+                        bytes: cover.bytes,
+                        mime: cover.mime,
+                        albumTitle: info.title,
+                        overwriteConfirmed: true,
+                    })
+                );
+            }
+            if (result.status === 'saved') {
+                return 'Title album art saved';
+            }
+            if (result.status === 'error') {
+                throw new Error(result.message);
+            }
+            return null;
+        },
+        [dispatch]
+    );
 
     useEffect(() => {
         if (!pdfUrl) {
@@ -134,13 +174,14 @@ export function LabelStudioDialog({
             setLoading(true);
             setError('');
             try {
+                const packTheme = opts.theme ?? activeTheme;
                 const result = await ensureLabelPack({
                     disc,
                     libraryTitle: designMode ? disc.title : libraryTitle,
                     coverUrl: designMode ? (demoCover ? DEMO_ALBUM_COVER_URL : null) : coverUrl,
                     coverBytes: designMode ? demoCover?.bytes ?? null : null,
                     coverMime: designMode ? demoCover?.mime ?? null : null,
-                    theme: opts.theme ?? activeTheme,
+                    theme: packTheme,
                     forceRegenerate: opts.forceRegenerate ?? true,
                     forceTypographic: useTypographic || (designMode && demoKind === 'mix'),
                     skipCache: designMode,
@@ -150,7 +191,23 @@ export function LabelStudioDialog({
                 setCutSvg(result.cutSvg);
                 setArtMode(result.artMode);
                 setTheme(result.theme.id === 'custom' ? theme : result.theme);
-                setStatus(result.fromCache ? 'Loaded from cache' : designMode ? 'Design preview' : 'Generated');
+                let nextStatus = result.fromCache ? 'Loaded from cache' : designMode ? 'Design preview' : 'Generated';
+                if (!designMode && result.artMode === 'typographic' && labelDisc) {
+                    try {
+                        const coverStatus = await persistTitleCover(labelDisc, packTheme);
+                        if (coverStatus) {
+                            nextStatus = `${nextStatus} · ${coverStatus}`;
+                        }
+                    } catch (coverError: unknown) {
+                        // Labels still succeed; cover save is best-effort alongside them.
+                        setError(
+                            coverError instanceof Error
+                                ? coverError.message
+                                : 'Labels generated, but title album art could not be saved.'
+                        );
+                    }
+                }
+                setStatus(nextStatus);
                 const url = URL.createObjectURL(new Blob([asBlobPart(result.artPdf)], { type: 'application/pdf' }));
                 setPdfUrl((prev) => {
                     if (prev) {
@@ -164,7 +221,19 @@ export function LabelStudioDialog({
                 setLoading(false);
             }
         },
-        [activeTheme, coverUrl, demoCover, demoKind, designMode, disc, forceTypographic, libraryTitle, theme]
+        [
+            activeTheme,
+            coverUrl,
+            demoCover,
+            demoKind,
+            designMode,
+            disc,
+            forceTypographic,
+            labelDisc,
+            libraryTitle,
+            persistTitleCover,
+            theme,
+        ]
     );
 
     useEffect(() => {
