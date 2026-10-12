@@ -10,16 +10,15 @@ import { makeStyles } from 'tss-react/mui';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import Link from '@mui/material/Link';
-import Box from '@mui/material/Box';
 import { W95App } from './win95/app';
 import { FilePlayer } from './file-player';
 import { validateAndLoadEncoders } from '../redux/actions';
 import { EncoderDownloadDialog } from './encoder-download-dialog';
 import { LabelStudioDialog } from './label-studio-dialog';
 import { isLabelDesignMode } from '../services/labels/demo-disc';
+import { deckTokens } from './deck-ui';
 
 const Toc = lazy(() => import('./factory/factory'));
-const Controls = lazy(() => import('./controls'));
 const Welcome = lazy(() => import('./welcome'));
 const Main = lazy(() => import('./main'));
 const useStyles = makeStyles()((theme) => ({
@@ -33,6 +32,16 @@ const useStyles = makeStyles()((theme) => ({
         },
         [forWideDesktop(theme)]: {
             width: 700,
+        },
+    },
+    layoutDeck: {
+        [forAnyDesktop(theme)]: {
+            width: 'min(1100px, 96%)',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+        },
+        [forWideDesktop(theme)]: {
+            width: 'min(1180px, 96%)',
         },
     },
 
@@ -50,6 +59,29 @@ const useStyles = makeStyles()((theme) => ({
         },
         [forWideDesktop(theme)]: {
             height: 250,
+        },
+    },
+    paperDeck: {
+        backgroundColor: deckTokens.surface,
+        border: `1.5px solid ${deckTokens.border}`,
+        borderRadius: deckTokens.radius,
+        boxShadow: '0 18px 40px rgba(17, 17, 17, 0.08)',
+        padding: theme.spacing(1.5),
+        overflow: 'hidden',
+        [forAnyDesktop(theme)]: {
+            marginTop: theme.spacing(2),
+            marginBottom: theme.spacing(1),
+            padding: theme.spacing(1.5),
+            height: 'auto',
+            minHeight: 640,
+            maxHeight: 'calc(100% - 48px)',
+        },
+        [forWideDesktop(theme)]: {
+            minHeight: 700,
+        },
+        [belowDesktop(theme)]: {
+            padding: theme.spacing(1),
+            height: 'calc(100% - 28px)',
         },
     },
     paperShowsList: {
@@ -86,18 +118,43 @@ const useStyles = makeStyles()((theme) => ({
     minidiscLogo: {
         width: 48,
     },
-    controlsContainer: {
-        flex: '0 0 auto',
-        width: '100%',
-        paddingRight: theme.spacing(8),
-        [belowDesktop(theme)]: {
-            paddingLeft: 0,
-        },
-    },
 }));
 
+const deckTypography = {
+    fontFamily: deckTokens.fontSans,
+    h1: { fontFamily: deckTokens.fontSans, fontWeight: 600, letterSpacing: '-0.02em' },
+    h2: { fontFamily: deckTokens.fontSans, fontWeight: 600, letterSpacing: '-0.02em' },
+    h3: { fontFamily: deckTokens.fontSans, fontWeight: 600 },
+    h4: { fontFamily: deckTokens.fontSans, fontWeight: 600 },
+    h5: { fontFamily: deckTokens.fontSans, fontWeight: 600 },
+    h6: { fontFamily: deckTokens.fontSans, fontWeight: 600 },
+    button: { fontFamily: deckTokens.fontSans, fontWeight: 500, textTransform: 'none' as const },
+    overline: { fontFamily: deckTokens.fontMono, letterSpacing: '0.12em' },
+    caption: { fontFamily: deckTokens.fontMono },
+};
+
 const themeCommons = {
+    typography: deckTypography,
+    shape: { borderRadius: deckTokens.radius },
     components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                ':root': {
+                    '--deck-surface': deckTokens.surface,
+                    '--deck-surface-muted': deckTokens.surfaceMuted,
+                    '--deck-ink': deckTokens.ink,
+                    '--deck-muted': deckTokens.muted,
+                    '--deck-accent': deckTokens.accent,
+                    '--deck-accent-hover': deckTokens.accentHover,
+                    '--deck-border': deckTokens.border,
+                    '--deck-lcd-bg': deckTokens.lcdBg,
+                    '--deck-lcd-ink': deckTokens.lcdInk,
+                    '--deck-meter-track': deckTokens.meterTrack,
+                    '--deck-font-sans': deckTokens.fontSans,
+                    '--deck-font-mono': deckTokens.fontMono,
+                },
+            },
+        },
         MuiSelect: {
             defaultProps: { variant: 'standard' },
         },
@@ -125,6 +182,19 @@ const themeCommons = {
         },
         MuiTextField: {
             defaultProps: { variant: 'standard' },
+        },
+        MuiButtonBase: {
+            defaultProps: {
+                disableRipple: false,
+            },
+            styleOverrides: {
+                root: {
+                    '&.Mui-focusVisible': {
+                        outline: `2px solid ${deckTokens.focusRing}`,
+                        outlineOffset: 2,
+                    },
+                },
+            },
         },
     },
 } as const;
@@ -168,15 +238,15 @@ const lightTheme = createTheme({
     palette: {
         mode: 'light',
         primary: {
-            light: '#7986cb',
-            main: '#3f51b5',
-            dark: '#303f9f',
+            light: '#FF7A40',
+            main: deckTokens.accent,
+            dark: deckTokens.accentHover,
             contrastText: '#fff',
         },
         secondary: {
-            light: '#ff4081',
-            main: '#f50057',
-            dark: '#c51162',
+            light: '#FF7A40',
+            main: deckTokens.accent,
+            dark: deckTokens.accentHover,
             contrastText: '#fff',
         },
         error: {
@@ -204,25 +274,26 @@ const lightTheme = createTheme({
             contrastText: 'rgba(0, 0, 0, 0.87)',
         },
         text: {
-            primary: 'rgba(0, 0, 0, 0.87)',
-            secondary: 'rgba(0, 0, 0, 0.54)',
-            disabled: 'rgba(0, 0, 0, 0.38)',
+            primary: deckTokens.ink,
+            secondary: deckTokens.muted,
+            disabled: 'rgba(17, 17, 17, 0.38)',
         },
         background: {
-            paper: '#fff',
-            default: '#fafafa',
+            paper: deckTokens.surface,
+            default: deckTokens.surfaceMuted,
         },
+        divider: deckTokens.borderHairline,
         action: {
-            active: 'rgba(0, 0, 0, 0.54)',
-            hover: 'rgba(0, 0, 0, 0.04)',
+            active: deckTokens.ink,
+            hover: 'rgba(17, 17, 17, 0.04)',
             hoverOpacity: 0.04,
-            selected: 'rgba(0, 0, 0, 0.08)',
-            selectedOpacity: 0.08,
-            disabled: 'rgba(0, 0, 0, 0.26)',
-            disabledBackground: 'rgba(0, 0, 0, 0.12)',
+            selected: 'rgba(255, 77, 0, 0.12)',
+            selectedOpacity: 0.12,
+            disabled: 'rgba(17, 17, 17, 0.26)',
+            disabledBackground: 'rgba(17, 17, 17, 0.12)',
             disabledOpacity: 0.38,
-            focus: 'rgba(0, 0, 0, 0.12)',
-            focusOpacity: 0.12,
+            focus: 'rgba(255, 77, 0, 0.18)',
+            focusOpacity: 0.18,
             activatedOpacity: 0.12,
         },
     },
@@ -235,6 +306,7 @@ const InternalApp = () => {
     const { classes, cx } = useStyles();
     const dispatch = useDispatch();
     const [labelDesignOpen, setLabelDesignOpen] = React.useState(() => isLabelDesignMode());
+    const isDeckMain = mainView === 'MAIN';
 
     // At init, connect to server and check for encoders.
     useEffect(() => {
@@ -245,6 +317,11 @@ const InternalApp = () => {
         if (isLabelDesignMode()) {
             setLabelDesignOpen(true);
         }
+    }, []);
+
+    useEffect(() => {
+        document.body.classList.add('deck-theme');
+        return () => document.body.classList.remove('deck-theme');
     }, []);
 
     return (
@@ -258,19 +335,24 @@ const InternalApp = () => {
                     </Backdrop>
                 }
             >
-                <main className={cx(classes.layout, { [classes.layoutFullWidth]: pageFullWidth })}>
+                <main
+                    className={cx(classes.layout, {
+                        [classes.layoutFullWidth]: pageFullWidth && !isDeckMain,
+                        [classes.layoutDeck]: isDeckMain,
+                    })}
+                >
                     <Paper
+                        elevation={isDeckMain ? 0 : 1}
                         className={cx(classes.paper, {
-                            [classes.paperShowsList]: deviceCapabilities.includes(0 /*Capability.listContent*/),
+                            [classes.paperShowsList]: !isDeckMain && deviceCapabilities.includes(0 /*Capability.listContent*/),
                             [classes.paperFullHeight]: pageFullHeight,
+                            [classes.paperDeck]: isDeckMain,
                         })}
                     >
                         {mainView === 'WELCOME' ? <Welcome /> : null}
                         {mainView === 'MAIN' ? <Main /> : null}
                         {mainView === 'FACTORY' ? <Toc /> : null}
                         {mainView === 'MAIN' ? <FilePlayer /> : null}
-
-                        <Box className={classes.controlsContainer}>{mainView === 'MAIN' ? <Controls /> : null}</Box>
                     </Paper>
                     <Typography variant="body2" color="textSecondary" className={classes.copyrightTypography}>
                         {'© '}
