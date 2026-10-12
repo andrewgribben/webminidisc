@@ -273,7 +273,12 @@ export function QueueScreen() {
         const load = () => {
             refresh().catch((err: unknown) => {
                 if (!cancelled) {
-                    setNotice(err instanceof Error ? err.message : 'Could not read the Downtify queue');
+                    const raw = err instanceof Error ? err.message : 'Could not read the Downtify queue';
+                    setNotice(
+                        /<!DOCTYPE|Unexpected token/i.test(raw)
+                            ? 'Downtify is not reachable from this page. Start the embedded Downtify service, then refresh.'
+                            : raw
+                    );
                 }
             });
         };

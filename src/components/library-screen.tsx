@@ -339,7 +339,12 @@ export function LibraryScreen({
 
     useEffect(() => {
         loadTracks().catch((err: unknown) => {
-            setLoadError(err instanceof Error ? err.message : 'Could not load the Downtify library');
+            const raw = err instanceof Error ? err.message : 'Could not load the Downtify library';
+            setLoadError(
+                /<!DOCTYPE|Unexpected token/i.test(raw)
+                    ? 'Downtify is not reachable from this page. Start the embedded Downtify service, then refresh.'
+                    : raw
+            );
         });
     }, [loadTracks]);
 
