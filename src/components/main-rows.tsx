@@ -25,8 +25,13 @@ const useStyles = makeStyles<
 >()((theme, _params, classes) => ({
     currentTrackRow: {
         color: theme.palette.primary.main,
+        fontWeight: 700,
+        boxShadow: `inset 3px 0 0 0 ${theme.palette.primary.main}`,
         '& > td': {
             color: 'inherit',
+            fontWeight: 'inherit',
+            borderTop: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
+            borderBottom: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
         },
     },
     inGroupTrackRow: {

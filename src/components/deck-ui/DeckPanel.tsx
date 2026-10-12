@@ -43,7 +43,6 @@ export type DeckPanelProps = {
     className?: string;
     bodyClassName?: string;
     flush?: boolean;
-    as?: keyof JSX.IntrinsicElements;
     'aria-label'?: string;
 };
 
@@ -53,14 +52,13 @@ export function DeckPanel({
     className,
     bodyClassName,
     flush = false,
-    as: Component = 'section',
     'aria-label': ariaLabel,
 }: DeckPanelProps) {
     const { classes, cx } = useStyles();
     return (
-        <Component className={cx(classes.root, className)} aria-label={ariaLabel}>
+        <section className={cx(classes.root, className)} aria-label={ariaLabel}>
             {header ? <div className={classes.header}>{header}</div> : null}
             <div className={cx(classes.body, flush && classes.bodyFlush, bodyClassName)}>{children}</div>
-        </Component>
+        </section>
     );
 }
