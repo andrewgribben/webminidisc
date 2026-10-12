@@ -170,6 +170,46 @@ export async function discCreateBody(disc: Disc, release?: ReleaseDetails): Prom
     };
 }
 
+/** Ensure every track has an album title so cover PUT can attach to an Album row. */
+export function withAlbumTitles(body: DiscCreateBody, albumTitle?: string | null): DiscCreateBody {
+    const fallback = (albumTitle || body.disc_title || 'Untitled Disc').trim() || 'Untitled Disc';
+    return {
+        ...body,
+        disc_title: body.disc_title || fallback,
+        tracks: body.tracks.map((track) => ({
+            ...track,
+            album: track.album?.trim() || fallback,
+        })),
+    };
+}
+
+export interface AlbumCoverUploadResult {
+    status: string;
+    album_id: number;
+    has_url: boolean;
+    has_blob: boolean;
+}
+
+export async function uploadDiscCover(
+    discId: number,
+    coverDataBase64: string,
+    mime: string
+): Promise<AlbumCoverUploadResult> {
+    return sendJson<AlbumCoverUploadResult>(`/api/discs/${discId}/cover`, 'PUT', {
+        cover_data_base64: coverDataBase64,
+        cover_mime_type: mime,
+    });
+}
+
+export function bytesToBase64(bytes: Uint8Array): string {
+    const chunk = 0x8000;
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+}
+
 async function readError(response: Response): Promise<string> {
     try {
         const body = (await response.json()) as { detail?: unknown };

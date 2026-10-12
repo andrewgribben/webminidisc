@@ -1,6 +1,7 @@
 import { batchActions } from '../frontend-utils';
 import { Capability, ExploitCapability } from '../services/interfaces/netmd';
 import {
+    bytesToBase64,
     detailedDisc,
     discCreateBody,
     listSavedAudio,
@@ -8,7 +9,9 @@ import {
     matchKnownDisc,
     ReleaseDetails,
     saveDisc,
+    uploadDiscCover,
     uploadSavedAudio,
+    withAlbumTitles,
 } from '../services/md-library';
 import { getTracks } from '../utils';
 import { downloadTracks, renameDisc, renameTrack } from './actions';
@@ -16,6 +19,12 @@ import { actions as discLibraryActions } from './disc-library-feature';
 import { actions as errorDialogActions } from './error-dialog-feature';
 import { checkFactoryCapability, exploitDownloadTracks } from './factory/factory-actions';
 import { AppDispatch, RootState } from './store';
+
+export type SaveGeneratedAlbumArtResult =
+    | { status: 'saved'; coverUrl: string }
+    | { status: 'needsConfirm' }
+    | { status: 'skipped' }
+    | { status: 'error'; message: string };
 
 const titleLimit = 120;
 
@@ -45,15 +54,24 @@ function reportError(dispatch: AppDispatch, message: string) {
     );
 }
 
-async function rememberDisc(dispatch: AppDispatch, discId: number, status?: string) {
+function cacheBustCoverUrl(url: string | null): string | null {
+    if (!url) {
+        return null;
+    }
+    const base = url.split('?')[0];
+    return `${base}?v=${Date.now()}`;
+}
+
+async function rememberDisc(dispatch: AppDispatch, discId: number, status?: string, bustCoverCache = false) {
     const detailed = await detailedDisc(discId);
     const audio = await listSavedAudio(discId);
     const cover = detailed.tracks.map((track) => track.album?.cover_url).find((url) => url) ?? null;
+    const resolved = libraryAssetUrl(cover);
     dispatch(
         discLibraryActions.setLibrary({
             discId,
             title: detailed.disc_title,
-            coverUrl: libraryAssetUrl(cover),
+            coverUrl: bustCoverCache ? cacheBustCoverUrl(resolved) : resolved,
             audioIndexes: audio.indexes,
         })
     );
@@ -138,6 +156,51 @@ export function applyMatchedRelease(release: ReleaseDetails) {
         } catch (error) {
             console.error(error);
             reportError(dispatch, error instanceof Error ? error.message : 'Could not save this album.');
+        }
+    };
+}
+
+/** Persist canvas-generated title art as the disc album cover (same path as MusicBrainz covers). */
+export function saveGeneratedAlbumArt(options: {
+    bytes: Uint8Array;
+    mime: string;
+    overwriteConfirmed?: boolean;
+    albumTitle?: string | null;
+}) {
+    return async function (dispatch: AppDispatch, getState: () => RootState): Promise<SaveGeneratedAlbumArtResult> {
+        const disc = getState().main.disc;
+        if (!disc) {
+            return { status: 'skipped' };
+        }
+        const existingCover = getState().discLibrary.coverUrl;
+        if (existingCover && !options.overwriteConfirmed) {
+            return { status: 'needsConfirm' };
+        }
+        try {
+            let discId = getState().discLibrary.discId;
+            if (discId == null) {
+                dispatch(discLibraryActions.setStatus('Saving the disc record…'));
+                const body = withAlbumTitles(await discCreateBody(disc), options.albumTitle);
+                const saved = await saveDisc(body);
+                discId = saved.disc_id;
+                await rememberDisc(dispatch, discId);
+            }
+            dispatch(discLibraryActions.setStatus('Saving title album art…'));
+            await uploadDiscCover(discId, bytesToBase64(options.bytes), options.mime);
+            await rememberDisc(dispatch, discId, 'Title album art saved for this disc.', true);
+            const coverUrl = getState().discLibrary.coverUrl;
+            if (!coverUrl) {
+                return {
+                    status: 'error',
+                    message: 'Album art was uploaded but the library did not return a cover URL.',
+                };
+            }
+            return { status: 'saved', coverUrl };
+        } catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : 'Could not save title album art.';
+            dispatch(discLibraryActions.setStatus(message));
+            return { status: 'error', message };
         }
     };
 }

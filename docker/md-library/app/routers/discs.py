@@ -496,16 +496,41 @@ def update_album_cover(disc_id: int, cover_data: AlbumCoverUpload):
     # Get the disc
     disc = session.query(m.Disc).filter(m.Disc.id == disc_id).first()
     if not disc:
+        session.close()
         raise HTTPException(status_code=404, detail="Disc not found")
     
-    # Get the first track to find the album
-    first_track = session.query(m.Track).filter(m.Track.disc_id == disc_id).order_by(m.Track.index_no).first()
-    if not first_track or not first_track.album_id:
+    tracks = session.query(m.Track).filter(m.Track.disc_id == disc_id).order_by(m.Track.index_no).all()
+    if not tracks:
+        session.close()
         raise HTTPException(status_code=404, detail="No album found for this disc")
-    
-    album = session.query(m.Album).filter(m.Album.id == first_track.album_id).first()
+
+    first_track = tracks[0]
+    album = None
+    if first_track.album_id:
+        album = session.query(m.Album).filter(m.Album.id == first_track.album_id).first()
+
+    # Discs saved without Match album may have tracks but no Album row.
     if not album:
-        raise HTTPException(status_code=404, detail="Album not found")
+        unknown_artist = session.query(m.Artist).filter(m.Artist.name == "Unknown Artist").first()
+        if not unknown_artist:
+            unknown_artist = m.Artist(mbid=None, name="Unknown Artist")
+            session.add(unknown_artist)
+            session.flush()
+        album_title = (disc.disc_title or "").strip() or "Untitled Disc"
+        album = m.Album(
+            mbid=None,
+            title=album_title,
+            artist_id=unknown_artist.id,
+            cover_url=None,
+            cover_data=None,
+            cover_mime_type=None,
+            year=None,
+        )
+        session.add(album)
+        session.flush()
+        for track in tracks:
+            if track.album_id is None:
+                track.album_id = album.id
     
     # Update cover_url if provided
     if cover_data.cover_url:
@@ -521,16 +546,20 @@ def update_album_cover(disc_id: int, cover_data: AlbumCoverUpload):
             album.cover_mime_type = cover_data.cover_mime_type or "image/jpeg"
             album.cover_url = None  # Clear URL if blob is provided
         except Exception as e:
+            session.close()
             raise HTTPException(status_code=400, detail=f"Invalid base64 data: {str(e)}")
     
+    album_id = album.id
+    has_url = album.cover_url is not None
+    has_blob = album.cover_data is not None
     session.commit()
     session.close()
     
     return {
         "status": "updated",
-        "album_id": album.id,
-        "has_url": album.cover_url is not None,
-        "has_blob": album.cover_data is not None
+        "album_id": album_id,
+        "has_url": has_url,
+        "has_blob": has_blob
     }
 
 @router.get("/albums/{album_id}/cover")
