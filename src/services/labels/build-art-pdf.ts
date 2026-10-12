@@ -227,7 +227,7 @@ function drawTypographicEdge(
     );
 }
 
-/** Track listing over album art on the cartridge face (readable white text on a light scrim). */
+/** Bottom-weighted scrim so cover art stays the visible background. */
 function drawAlbumFaceTracklist(
     page: PDFPage,
     font: PDFFont,
@@ -237,8 +237,17 @@ function drawAlbumFaceTracklist(
 ) {
     const ink = rgb(1, 1, 1);
     const pad = 2.2 * PT_PER_MM;
-    // Soft full-panel scrim so track text stays readable on any cover.
-    page.drawRectangle({ ...box, color: rgb(0, 0, 0), opacity: 0.4 });
+    // Light full-panel wash (cover stays visible) + stronger top band for the title.
+    page.drawRectangle({ ...box, color: rgb(0, 0, 0), opacity: 0.22 });
+    const topBand = Math.min(box.height * 0.28, 14 * PT_PER_MM);
+    page.drawRectangle({
+        x: box.x,
+        y: box.y + box.height - topBand,
+        width: box.width,
+        height: topBand,
+        color: rgb(0, 0, 0),
+        opacity: 0.28,
+    });
 
     let cursorY = box.y + box.height - pad - 7;
     const titleSize = Math.min(9, box.width / 8);
@@ -270,7 +279,16 @@ function drawAlbumEdgeTitle(
     disc: LabelDiscInfo,
     box: { x: number; y: number; width: number; height: number }
 ) {
-    page.drawRectangle({ ...box, color: rgb(0, 0, 0), opacity: 0.35 });
+    // Narrow bar behind title only — keep most of the cover strip visible.
+    const barH = Math.min(box.height, 3.2 * PT_PER_MM);
+    page.drawRectangle({
+        x: box.x,
+        y: box.y + (box.height - barH) / 2,
+        width: box.width,
+        height: barH,
+        color: rgb(0, 0, 0),
+        opacity: 0.45,
+    });
     const text = disc.title || 'Untitled Disc';
     const size = Math.min(7.5, box.height * 0.55);
     const truncated = truncateToWidth(fontBold, text, size, box.width - 4 * PT_PER_MM);
@@ -283,22 +301,63 @@ function drawAlbumEdgeTitle(
     });
 }
 
+/** Re-encode arbitrary image bytes to PNG via canvas when pdf-lib cannot embed the original. */
+async function reencodeToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+    try {
+        const blob = new Blob([bytes.slice()]);
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            bitmap.close();
+            return null;
+        }
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        const dataUrl = canvas.toDataURL('image/png');
+        const raw = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
+        const out = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) {
+            out[i] = raw.charCodeAt(i);
+        }
+        return out;
+    } catch {
+        return null;
+    }
+}
+
 async function embedCoverOrNull(pdf: PDFDocument, bytes: Uint8Array | null, mime: string | null): Promise<PDFImage | null> {
     if (!bytes || !mime) {
         return null;
     }
-    try {
-        if (mime.includes('png')) {
-            return await pdf.embedPng(bytes);
-        }
-        return await pdf.embedJpg(bytes);
-    } catch {
+    const tryEmbed = async (data: Uint8Array, kind: string): Promise<PDFImage | null> => {
         try {
-            return await pdf.embedPng(bytes);
+            if (kind.includes('png')) {
+                return await pdf.embedPng(data);
+            }
+            if (kind.includes('jpg') || kind.includes('jpeg')) {
+                return await pdf.embedJpg(data);
+            }
+            return null;
         } catch {
             return null;
         }
+    };
+
+    const direct = (await tryEmbed(bytes, mime)) ?? (await tryEmbed(bytes, 'png')) ?? (await tryEmbed(bytes, 'jpeg'));
+    if (direct) {
+        return direct;
     }
+    const png = await reencodeToPng(bytes);
+    if (!png) {
+        return null;
+    }
+    return tryEmbed(png, 'png');
 }
 
 export async function buildArtPdf(input: LabelPackInput, layout: A4LabelLayout = createA4LabelLayout()): Promise<Uint8Array> {
@@ -319,6 +378,9 @@ export async function buildArtPdf(input: LabelPackInput, layout: A4LabelLayout =
     drawRegistrationMarks(page, layout);
 
     const coverImage = input.artMode === 'album' ? await embedCoverOrNull(pdf, input.coverBytes, input.coverMime) : null;
+    if (input.artMode === 'album' && !coverImage) {
+        throw new Error('Album art could not be embedded into the PDF (unsupported image format).');
+    }
 
     for (const id of ALL_PARTS as LabelPartId[]) {
         if (!include.has(id)) {

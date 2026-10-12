@@ -68,38 +68,53 @@ export const DEMO_ALBUM_DISC: Disc = {
     ],
 };
 
-/** Tiny solid PNG used as stand-in album art in design mode (no network). */
+/** Stand-in cover for design mode (no network) — poster-style art, not a flat theme fill. */
 export function demoCoverPngBytes(): Uint8Array {
-    // 1×1 orange pixel PNG
-    const b64 =
+    const fallbackB64 =
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
+    const fallbackBinary = atob(fallbackB64);
+    const fallback = new Uint8Array(fallbackBinary.length);
+    for (let i = 0; i < fallbackBinary.length; i++) {
+        fallback[i] = fallbackBinary.charCodeAt(i);
     }
-    // Scale up to a usable cover via canvas when available
     if (typeof document === 'undefined') {
-        return bytes;
+        return fallback;
     }
     const canvas = document.createElement('canvas');
     canvas.width = 600;
     canvas.height = 600;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-        return bytes;
+        return fallback;
     }
-    const g = ctx.createLinearGradient(0, 0, 600, 600);
-    g.addColorStop(0, '#1A1A1A');
-    g.addColorStop(0.55, '#FF4D00');
-    g.addColorStop(1, '#FFC700');
-    ctx.fillStyle = g;
+    // Warm photo-like base
+    const base = ctx.createRadialGradient(220, 180, 40, 300, 320, 420);
+    base.addColorStop(0, '#3D2A1F');
+    base.addColorStop(0.45, '#8B4518');
+    base.addColorStop(1, '#1A0F0A');
+    ctx.fillStyle = base;
     ctx.fillRect(0, 0, 600, 600);
-    ctx.fillStyle = '#F5F5F5';
-    ctx.font = 'bold 48px Helvetica, Arial, sans-serif';
-    ctx.fillText('DEMO', 40, 80);
-    ctx.font = '28px Helvetica, Arial, sans-serif';
-    ctx.fillText('ALBUM ART', 40, 130);
+    // Soft colour fields (album-poster composition)
+    ctx.fillStyle = 'rgba(212, 90, 40, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(420, 160, 180, 120, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(240, 200, 80, 0.35)';
+    ctx.beginPath();
+    ctx.ellipse(140, 480, 200, 140, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(20, 20, 20, 0.35)';
+    ctx.fillRect(0, 0, 600, 90);
+    ctx.fillRect(0, 510, 600, 90);
+    // Fine grain so it doesn't read as a flat CSS colour
+    const grain = ctx.getImageData(0, 0, 600, 600);
+    for (let i = 0; i < grain.data.length; i += 16) {
+        const n = (Math.random() - 0.5) * 28;
+        grain.data[i] = Math.max(0, Math.min(255, grain.data[i] + n));
+        grain.data[i + 1] = Math.max(0, Math.min(255, grain.data[i + 1] + n));
+        grain.data[i + 2] = Math.max(0, Math.min(255, grain.data[i + 2] + n));
+    }
+    ctx.putImageData(grain, 0, 0);
     const dataUrl = canvas.toDataURL('image/png');
     const raw = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
     const out = new Uint8Array(raw.length);
