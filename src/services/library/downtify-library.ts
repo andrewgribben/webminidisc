@@ -329,7 +329,7 @@ function formatDownloadStatus(result: DowntifyDownloadResult): string {
     }
     const label = result.kind === 'playlist' ? 'playlist' : 'album';
     const name = result.name ? ` “${result.name}”` : '';
-    return `Queued ${result.count} track${result.count === 1 ? '' : 's'} from ${label}${name} in Downtify. Open Downtify or refresh the library when downloads finish.`;
+    return `Queued ${result.count} track${result.count === 1 ? '' : 's'} from ${label}${name} in Downtify. Refresh Library when downloads finish. If Write M3U was on, Downtify also writes a .m3u file in the music folder — that file is not a Library playlist row.`;
 }
 
 export function queueSongId(song: DowntifySong): string {

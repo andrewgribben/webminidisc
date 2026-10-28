@@ -410,7 +410,7 @@ export function QueueScreen() {
                     <div className={classes.toggleRow}>
                         <FormControlLabel
                             control={<Switch checked={generateM3u} onChange={(_e, checked) => setGenerateM3u(checked)} size="small" />}
-                            label="Generate M3U"
+                            label="Write M3U file"
                         />
                         <HardwareButton type="submit" accent padded disabled={downloading || downloadUrl.trim().length === 0}>
                             Queue download
@@ -421,6 +421,11 @@ export function QueueScreen() {
                             </HardwareButton>
                         ) : null}
                     </div>
+                    <p className={classes.footerNote} style={{ margin: 0 }}>
+                        Write M3U saves a <code>.m3u</code> playlist file next to the downloaded tracks in Downtify’s music folder (for
+                        VLC, Jellyfin, etc.). It does not create a playlist entry in this Library — Library playlists come from Downtify’s
+                        own playlist catalog after the tracks finish.
+                    </p>
                 </form>
                 {notice ? <p className={classes.notice}>{notice}</p> : null}
 
