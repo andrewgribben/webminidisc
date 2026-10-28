@@ -307,7 +307,7 @@ export function QueueScreen() {
     const library = useMemo(() => getDowntifyLibrary(), []);
     const [jobs, setJobs] = useState<DowntifyQueueJob[]>([]);
     const [downloadUrl, setDownloadUrl] = useState('');
-    const [generateM3u, setGenerateM3u] = useState(true);
+    const [saveAsPlaylist, setSaveAsPlaylist] = useState(true);
     const [downloading, setDownloading] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
     const [youtubeUrls, setYoutubeUrls] = useState<Record<string, string>>({});
@@ -378,7 +378,7 @@ export function QueueScreen() {
             setDownloading(true);
             setNotice('Resolving URL in Downtify…');
             try {
-                const result = await library.downloadFromUrl(url, { generateM3u });
+                const result = await library.downloadFromUrl(url, { saveAsPlaylist });
                 setDownloadUrl('');
                 setNotice(DowntifyLibraryService.statusMessage(result));
                 await refresh();
@@ -388,7 +388,7 @@ export function QueueScreen() {
                 setDownloading(false);
             }
         },
-        [downloadUrl, generateM3u, library, refresh]
+        [downloadUrl, saveAsPlaylist, library, refresh]
     );
 
     const finished = jobs.some((job) => job.status === 'done');
@@ -409,8 +409,10 @@ export function QueueScreen() {
                     />
                     <div className={classes.toggleRow}>
                         <FormControlLabel
-                            control={<Switch checked={generateM3u} onChange={(_e, checked) => setGenerateM3u(checked)} size="small" />}
-                            label="Generate M3U"
+                            control={
+                                <Switch checked={saveAsPlaylist} onChange={(_e, checked) => setSaveAsPlaylist(checked)} size="small" />
+                            }
+                            label="Save as a Playlist"
                         />
                         <HardwareButton type="submit" accent padded disabled={downloading || downloadUrl.trim().length === 0}>
                             Queue download
@@ -421,6 +423,10 @@ export function QueueScreen() {
                             </HardwareButton>
                         ) : null}
                     </div>
+                    <p className={classes.footerNote} style={{ margin: 0 }}>
+                        For albums and playlists, Save as a Playlist registers the download under Library → Playlists (so you can browse and
+                        encode the set together). Single-track URLs always land under Tracks only.
+                    </p>
                 </form>
                 {notice ? <p className={classes.notice}>{notice}</p> : null}
 

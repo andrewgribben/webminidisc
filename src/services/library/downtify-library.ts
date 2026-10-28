@@ -223,6 +223,8 @@ export type DowntifyDownloadResult = {
     count: number;
     /** Batch jobs are queued in Downtify; a single track finishes before return. */
     queued: boolean;
+    /** True when Downtify was asked to register this batch as a Library playlist. */
+    savedAsPlaylist?: boolean;
 };
 
 function isLeaf(value: LibraryNode | LibraryLeaf): value is LibraryLeaf {
@@ -329,7 +331,10 @@ function formatDownloadStatus(result: DowntifyDownloadResult): string {
     }
     const label = result.kind === 'playlist' ? 'playlist' : 'album';
     const name = result.name ? ` “${result.name}”` : '';
-    return `Queued ${result.count} track${result.count === 1 ? '' : 's'} from ${label}${name} in Downtify. Open Downtify or refresh the library when downloads finish.`;
+    const playlistHint = result.savedAsPlaylist
+        ? ' It will appear under Library → Playlists when the download finishes.'
+        : '';
+    return `Queued ${result.count} track${result.count === 1 ? '' : 's'} from ${label}${name} in Downtify. Refresh Library when downloads finish.${playlistHint}`;
 }
 
 export function queueSongId(song: DowntifySong): string {
@@ -455,21 +460,32 @@ export class DowntifyLibraryService implements LibraryService {
         }
     }
 
-    async downloadBatch(songs: DowntifySong[], playlistUrl: string, generateM3u = true): Promise<{ count: number }> {
+    async downloadBatch(
+        songs: DowntifySong[],
+        playlistUrl: string,
+        options?: { saveAsPlaylist?: boolean; playlistName?: string }
+    ): Promise<{ count: number }> {
+        const saveAsPlaylist = options?.saveAsPlaylist ?? true;
+        const playlistName = options?.playlistName?.trim() ?? '';
+        const body: Record<string, unknown> = {
+            songs,
+            playlist_url: playlistUrl,
+            // Downtify Library playlists are backed by M3U / playlist catalog entries.
+            generate_m3u: saveAsPlaylist,
+        };
+        if (!playlistUrl && playlistName.length > 0) {
+            body.playlist_name = playlistName;
+        }
         const response = await fetch(endpoint(this.address, 'api/download/batch'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                songs,
-                playlist_url: playlistUrl,
-                generate_m3u: generateM3u,
-            }),
+            body: JSON.stringify(body),
         });
         if (!response.ok) {
             throw new Error(await readError(response));
         }
-        const body = (await response.json()) as { count?: number };
-        return { count: typeof body.count === 'number' ? body.count : songs.length };
+        const responseBody = (await response.json()) as { count?: number };
+        return { count: typeof responseBody.count === 'number' ? responseBody.count : songs.length };
     }
 
     async listLibraryTracks(): Promise<DowntifyLibraryTrack[]> {
@@ -612,11 +628,12 @@ export class DowntifyLibraryService implements LibraryService {
      * ``/api/download/batch`` (playlist / album track list).
      * The file format is Downtify's own server setting.
      */
-    async downloadFromUrl(url: string, options?: { generateM3u?: boolean }): Promise<DowntifyDownloadResult> {
+    async downloadFromUrl(url: string, options?: { saveAsPlaylist?: boolean }): Promise<DowntifyDownloadResult> {
         const resolved = await this.resolveUrl(url);
         const kind = resolved.kind;
         const name = typeof resolved.name === 'string' ? resolved.name : '';
         const tracks = Array.isArray(resolved.tracks) ? resolved.tracks.filter((song) => song && typeof song === 'object') : [];
+        const saveAsPlaylist = options?.saveAsPlaylist ?? true;
 
         if (kind === 'artist') {
             throw new Error('Artist links are not supported here. Paste a track, album, or playlist URL instead.');
@@ -639,11 +656,17 @@ export class DowntifyLibraryService implements LibraryService {
                 throw new Error(`No tracks found for this ${kind}`);
             }
 
-            // YouTube Music album/browse URLs have a dedicated endpoint that keeps
-            // shared album tags consistent across tracks.
-            if (kind === 'album' && !isPlaylistUrl(url) && /youtube|youtu\.be/i.test(url) && /browse\/MPREb_|list=OLAK5uy_/i.test(url)) {
+            // YouTube Music album/browse has a dedicated endpoint for shared tags, but it
+            // skips playlist registration. Prefer batch when the user wants a Library playlist.
+            const useAlbumShortcut =
+                !saveAsPlaylist &&
+                kind === 'album' &&
+                !isPlaylistUrl(url) &&
+                /youtube|youtu\.be/i.test(url) &&
+                /browse\/MPREb_|list=OLAK5uy_/i.test(url);
+            if (useAlbumShortcut) {
                 await this.downloadAlbumUrl(url);
-                return { kind: 'album', name, count: tracks.length, queued: false };
+                return { kind: 'album', name, count: tracks.length, queued: false, savedAsPlaylist: false };
             }
 
             const playlistUrl = kind === 'playlist' || isPlaylistUrl(url) ? url : '';
@@ -653,13 +676,16 @@ export class DowntifyLibraryService implements LibraryService {
                 downtify_track_order: typeof song.downtify_track_order === 'number' ? song.downtify_track_order : index,
                 album_name: typeof song.album_name === 'string' && song.album_name.length > 0 ? song.album_name : name || song.album_name,
             }));
-            const generateM3u = options?.generateM3u ?? Boolean(playlistUrl);
-            const { count } = await this.downloadBatch(songs, playlistUrl, generateM3u);
+            const { count } = await this.downloadBatch(songs, playlistUrl, {
+                saveAsPlaylist,
+                playlistName: name || (kind === 'album' ? 'Album' : 'Playlist'),
+            });
             return {
                 kind: kind === 'playlist' ? 'playlist' : 'album',
                 name,
                 count,
                 queued: true,
+                savedAsPlaylist: saveAsPlaylist,
             };
         }
 
