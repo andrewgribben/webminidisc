@@ -165,13 +165,6 @@ const useStyles = makeStyles()(() => ({
         padding: '6px 0',
         borderTop: `1px solid ${deckTokens.borderHairline}`,
     },
-    footerNote: {
-        fontFamily: deckTokens.fontMono,
-        fontSize: 11,
-        color: deckTokens.muted,
-        letterSpacing: '0.04em',
-        lineHeight: 1.5,
-    },
     notice: {
         fontFamily: deckTokens.fontSans,
         fontSize: 13,
