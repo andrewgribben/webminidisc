@@ -822,10 +822,6 @@ export function LibraryScreen({
                         {!canEncode ? (
                             <p className={classes.note}>Connect a MiniDisc to encode selected tracks.</p>
                         ) : null}
-                        <p className={classes.note}>
-                            Tracks already on this Downtify instance appear here after download. Encode pulls from the local library, not a
-                            second download.
-                        </p>
                     </aside>
                 </div>
             </DeckPanel>
