@@ -375,7 +375,16 @@ function getTrackStatus(track: Track, deviceStatus: DeviceStatus | null): 'playi
     }
 }
 
-export const Main = (props: {}) => {
+export type MainProps = {
+    /** When false, the disc deck stays mounted so its dialogs can open, but the deck itself is hidden. */
+    deckVisible?: boolean;
+    /** Registers a setter so Library can hand tracks to the upload dialog without remounting this view. */
+    bindEncodeFiles?: (encode: (files: (File | AdaptiveFile)[]) => void) => void;
+    /** The deck shell renders Settings itself so the modal can cover Library and Queue. */
+    shellDialogs?: boolean;
+};
+
+export const Main = ({ deckVisible = true, bindEncodeFiles, shellDialogs = true }: MainProps) => {
     const dispatch = useDispatch();
     const disc = useShallowEqualSelector((state) => state.main.disc);
     const flushable = useShallowEqualSelector((state) => state.main.flushable);
@@ -393,6 +402,13 @@ export const Main = (props: {}) => {
     const [selected, setSelected] = React.useState<number[]>([]);
     const [selectedGroups, setSelectedGroups] = React.useState<number[]>([]);
     const [uploadedFiles, setUploadedFiles] = React.useState<(File | AdaptiveFile)[]>([]);
+    useEffect(() => {
+        if (!bindEncodeFiles) {
+            return;
+        }
+        bindEncodeFiles(setUploadedFiles);
+        return () => bindEncodeFiles(() => {});
+    }, [bindEncodeFiles]);
     const [lastClicked, setLastClicked] = useState(-1);
     const [moveMenuAnchorEl, setMoveMenuAnchorEl] = React.useState<null | HTMLElement>(null);
     const [showRemainingSpace, setShowRemainingSpace] = useState(true);
@@ -812,7 +828,13 @@ export const Main = (props: {}) => {
 
     return (
         <React.Fragment>
-            <Box className={classes.deckRoot} {...getRootProps()} id="main">
+            <Box
+                className={classes.deckRoot}
+                style={deckVisible ? undefined : { display: 'none' }}
+                aria-hidden={deckVisible ? undefined : true}
+                {...getRootProps()}
+                id="main"
+            >
                 <input {...getInputProps()} />
                 {flushable ? (
                     <div className={classes.brandMeta}>
@@ -1167,7 +1189,7 @@ export const Main = (props: {}) => {
                 />
             </Box>
 
-            {deviceCapabilities.trackUpload ? (
+            {deckVisible && deviceCapabilities.trackUpload ? (
                 <Fab color="primary" aria-label="add" className={classes.add} onClick={openUploadMenu}>
                     <AddIcon />
                 </Fab>
@@ -1204,7 +1226,7 @@ export const Main = (props: {}) => {
             <FactoryModeNoticeDialog />
             <AboutDialog />
             <ChangelogDialog />
-            <SettingsDialog />
+            {shellDialogs ? <SettingsDialog /> : null}
             <ManageEncodersDialog />
             <LocalLibraryDialog setUploadedFiles={setUploadedFiles} />
             <PanicDialog />

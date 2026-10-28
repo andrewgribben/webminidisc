@@ -1,4 +1,4 @@
-import React, { useCallback, lazy, Suspense, useEffect, useState } from 'react';
+import React, { useCallback, lazy, Suspense, useEffect, useRef } from 'react';
 import { belowDesktop, forAnyDesktop, forWideDesktop, useDispatch, useShallowEqualSelector } from '../frontend-utils';
 
 import CssBaseline from '@mui/material/CssBaseline';
@@ -14,11 +14,12 @@ import { W95App } from './win95/app';
 import { FilePlayer } from './file-player';
 import { validateAndLoadEncoders } from '../redux/actions';
 import { EncoderDownloadDialog } from './encoder-download-dialog';
+import { SettingsDialog } from './settings-dialog';
 import { LabelStudioDialog } from './label-studio-dialog';
 import { isLabelDesignMode } from '../services/labels/demo-disc';
 import { AdaptiveFile } from '../utils';
+import { actions as appActions } from '../redux/app-feature';
 import { actions as convertDialogActions } from '../redux/convert-dialog-feature';
-import { ConvertDialog } from './convert-dialog';
 import { LibraryScreen } from './library-screen';
 import { QueueScreen } from './queue-screen';
 import { DeckNavBar, deckTokens } from './deck-ui';
@@ -276,12 +277,29 @@ const InternalApp = () => {
     const { classes, cx } = useStyles();
     const dispatch = useDispatch();
     const [labelDesignOpen, setLabelDesignOpen] = React.useState(() => isLabelDesignMode());
-    const [libraryEncodeFiles, setLibraryEncodeFiles] = useState<(File | AdaptiveFile)[]>([]);
+    const encodeFilesRef = useRef<(files: (File | AdaptiveFile)[]) => void>(() => {});
     const showShellNav = mainView === 'WELCOME' || mainView === 'MAIN';
     const isDeckShell = showShellNav;
     const showNowPlaying = shellSection === 'nowPlaying';
     const showLibrary = shellSection === 'library';
     const showQueue = shellSection === 'queue';
+    const openDeckDialog = useShallowEqualSelector(
+        (state) =>
+            state.appState.mainView === 'MAIN' &&
+            (state.uploadDialog.visible ||
+                state.recordDialog.visible ||
+                state.renameDialog.visible ||
+                state.errorDialog.visible ||
+                state.panicDialog.visible ||
+                state.dumpDialog.visible ||
+                state.songRecognitionDialog.visible ||
+                state.songRecognitionProgressDialog.visible ||
+                state.factoryNoticeDialog.visible ||
+                state.factoryProgressDialog.visible ||
+                state.factoryBadSectorDialog.visible ||
+                state.localLibrary.visible ||
+                state.convertDialog.visible)
+    );
 
     // At init, connect to server and check for encoders.
     useEffect(() => {
@@ -299,15 +317,26 @@ const InternalApp = () => {
         return () => document.body.classList.remove('deck-theme');
     }, []);
 
+    const bindEncodeFiles = useCallback((encode: (files: (File | AdaptiveFile)[]) => void) => {
+        encodeFilesRef.current = encode;
+    }, []);
+
     const handleLibraryEncode = useCallback(
         (files: AdaptiveFile[]) => {
-            setLibraryEncodeFiles(files);
-            if (files.length > 0) {
-                dispatch(convertDialogActions.setVisible(true));
+            if (files.length === 0) {
+                return;
             }
+            encodeFilesRef.current(files);
+            dispatch(convertDialogActions.setVisible(true));
         },
         [dispatch]
     );
+
+    useEffect(() => {
+        if (openDeckDialog && shellSection !== 'nowPlaying') {
+            dispatch(appActions.setShellSection('nowPlaying'));
+        }
+    }, [dispatch, openDeckDialog, shellSection]);
 
     return (
         <React.Fragment>
@@ -336,14 +365,17 @@ const InternalApp = () => {
                     >
                         {showShellNav ? <DeckNavBar deviceName={mainView === 'MAIN' ? deviceName : undefined} /> : null}
                         {mainView === 'FACTORY' ? <Toc /> : null}
-                        {mainView !== 'FACTORY' && showNowPlaying && mainView === 'WELCOME' ? <Welcome /> : null}
-                        {mainView !== 'FACTORY' && showNowPlaying && mainView === 'MAIN' ? <Main /> : null}
+                        {mainView !== 'FACTORY' && showNowPlaying && mainView === 'WELCOME' ? <Welcome shellDialogs={false} /> : null}
+                        {mainView === 'MAIN' ? (
+                            <Suspense fallback={null}>
+                                <Main deckVisible={showNowPlaying} bindEncodeFiles={bindEncodeFiles} shellDialogs={false} />
+                            </Suspense>
+                        ) : null}
                         {mainView !== 'FACTORY' && showLibrary ? (
                             <LibraryScreen onUseFiles={handleLibraryEncode} canEncode={mainView === 'MAIN'} />
                         ) : null}
                         {mainView !== 'FACTORY' && showQueue ? <QueueScreen /> : null}
                         {mainView === 'MAIN' ? <FilePlayer /> : null}
-                        {mainView === 'MAIN' && (showLibrary || showQueue) ? <ConvertDialog files={libraryEncodeFiles} /> : null}
                     </Paper>
                     <Typography variant="body2" color="textSecondary" className={classes.copyrightTypography}>
                         {'© '}
@@ -366,6 +398,7 @@ const InternalApp = () => {
                 </Backdrop>
             ) : null}
 
+            <SettingsDialog />
             <EncoderDownloadDialog />
             {labelDesignOpen ? (
                 <LabelStudioDialog

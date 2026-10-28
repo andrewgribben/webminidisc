@@ -1403,6 +1403,10 @@ export function convertAndUpload(
         }
         if (files.length === 0) return;
 
+        // Upload progress and errors render on the Now Playing deck. Jump there before the
+        // async prep work, or Library/Queue stay blank until the user switches by hand.
+        dispatch(appStateActions.setShellSection('nowPlaying'));
+
         const { audioExportService, netmdService, netmdSpec } = serviceRegistry;
         let { netmdFactoryService } = serviceRegistry;
         if (format.codec === 'SPM' && !deviceCapabilities.includes(Capability.nativeMonoUpload)) {
