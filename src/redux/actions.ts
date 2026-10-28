@@ -36,6 +36,7 @@ import { Capability, NetMDService, Disc, Codec, MinidiscSpec, ExploitCapability 
 import { getSimpleServices, ServiceConstructionInfo } from '../services/interface-service-manager';
 import { checkFactoryCapability, initializeFactoryMode } from './factory/factory-actions';
 import { LibraryServices } from '../services/library-services';
+import { DowntifyLibraryService } from '../services/library/downtify-library';
 import { s16LEToSamplesArray, Shazam } from 'shazam-api';
 import { AudioEncoderV1ExportParams, transferCodecToExportCodec } from '../services/audio/apiv1/external-interface';
 import { EncoderStorageManager } from '../services/audio/apiv1/dynamic-encoders';
@@ -1399,6 +1400,10 @@ export function convertAndUpload(
         }
         if (files.length === 0) return;
 
+        // Upload progress and errors render on the Now Playing deck. Jump there before the
+        // async prep work, or Library/Queue stay blank until the user switches by hand.
+        dispatch(appStateActions.setShellSection('nowPlaying'));
+
         const { audioExportService, netmdService, netmdSpec } = serviceRegistry;
         let { netmdFactoryService } = serviceRegistry;
         if (format.codec === 'SPM' && !deviceCapabilities.includes(Capability.nativeMonoUpload)) {
@@ -1741,6 +1746,13 @@ export function openLocalLibrary() {
     return async function (dispatch: AppDispatch, getState: () => RootState) {
         if (!serviceRegistry.libraryService) {
             throw new Error('No library service has been registered!');
+        }
+
+        // Downtify uses the Library shell section instead of the legacy modal.
+        if (serviceRegistry.libraryService instanceof DowntifyLibraryService) {
+            dispatch(appStateActions.setShellSection('library'));
+            dispatch(localLibraryActions.setVisible(false));
+            return;
         }
 
         dispatch(localLibraryActions.setVisible(true));

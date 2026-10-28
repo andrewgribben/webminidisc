@@ -173,6 +173,18 @@ export type DowntifyLibraryTrack = {
     /** Uppercase container extension, such as FLAC or MP3. */
     format: string;
     playlists: string[];
+    /** Tag year when Downtify returns it. */
+    year: string;
+    /** Codec from Downtify tags (may differ from container `format`). */
+    codec: string;
+    /** Bits per second when present. */
+    bitrate: number | null;
+    /** Sample rate in Hz when present. */
+    sampleRate: number | null;
+    channels: number | null;
+    hasCover: boolean;
+    /** File size in bytes when present. */
+    size: number | null;
 };
 
 export function libraryFileFormat(filePath: string): string {
@@ -491,9 +503,28 @@ export class DowntifyLibraryService implements LibraryService {
                     duration: typeof track.duration === 'number' ? track.duration : 0,
                     format: libraryFileFormat(track.file),
                     playlists,
+                    year: typeof track.year === 'string' ? track.year : typeof track.year === 'number' ? String(track.year) : '',
+                    codec: typeof track.codec === 'string' ? track.codec : '',
+                    bitrate: typeof track.bitrate === 'number' ? track.bitrate : null,
+                    sampleRate: typeof track.sample_rate === 'number' ? track.sample_rate : null,
+                    channels: typeof track.channels === 'number' ? track.channels : null,
+                    hasCover: track.has_cover === true,
+                    size: typeof track.size === 'number' ? track.size : null,
                 },
             ];
         });
+    }
+
+    /** Embedded Downtify cover for a library file when `has_cover` is true. */
+    trackCoverUrl(filePath: string): string {
+        return endpoint(this.address, `cover/${encodeLibraryPath(filePath)}`);
+    }
+
+    /** Embedded Downtify playlist cover path when the playlist reports a cover. */
+    playlistCoverUrl(playlistName: string): string {
+        const target = new URL(endpoint(this.address, 'playlist-cover'));
+        target.searchParams.set('name', playlistName);
+        return target.toString();
     }
 
     async listPlaylists(): Promise<DowntifyPlaylist[]> {
@@ -581,7 +612,7 @@ export class DowntifyLibraryService implements LibraryService {
      * ``/api/download/batch`` (playlist / album track list).
      * The file format is Downtify's own server setting.
      */
-    async downloadFromUrl(url: string): Promise<DowntifyDownloadResult> {
+    async downloadFromUrl(url: string, options?: { generateM3u?: boolean }): Promise<DowntifyDownloadResult> {
         const resolved = await this.resolveUrl(url);
         const kind = resolved.kind;
         const name = typeof resolved.name === 'string' ? resolved.name : '';
@@ -620,8 +651,10 @@ export class DowntifyLibraryService implements LibraryService {
                 ...song,
                 downtify_playlist_url: playlistUrl || undefined,
                 downtify_track_order: typeof song.downtify_track_order === 'number' ? song.downtify_track_order : index,
+                album_name: typeof song.album_name === 'string' && song.album_name.length > 0 ? song.album_name : name || song.album_name,
             }));
-            const { count } = await this.downloadBatch(songs, playlistUrl, Boolean(playlistUrl));
+            const generateM3u = options?.generateM3u ?? Boolean(playlistUrl);
+            const { count } = await this.downloadBatch(songs, playlistUrl, generateM3u);
             return {
                 kind: kind === 'playlist' ? 'playlist' : 'album',
                 name,

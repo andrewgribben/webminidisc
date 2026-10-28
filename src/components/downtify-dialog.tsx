@@ -101,6 +101,13 @@ function unnamedTrack(file: string, playlist: string): DowntifyLibraryTrack {
         duration: 0,
         format: libraryFileFormat(file),
         playlists: [playlist],
+        year: '',
+        codec: '',
+        bitrate: null,
+        sampleRate: null,
+        channels: null,
+        hasCover: false,
+        size: null,
     };
 }
 
