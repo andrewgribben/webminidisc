@@ -379,12 +379,8 @@ const InternalApp = () => {
                     </Paper>
                     <Typography variant="body2" color="textSecondary" className={classes.copyrightTypography}>
                         {'© '}
-                        <Link rel="noopener noreferrer" color="inherit" target="_blank" href="https://stefano.brilli.me/">
-                            Stefano Brilli
-                        </Link>
-                        {', '}
-                        <Link rel="noopener noreferrer" color="inherit" target="_blank" href="https://github.com/asivery/">
-                            Asivery
+                        <Link rel="noopener noreferrer" color="inherit" target="_blank" href="https://grib.co">
+                            grib.co
                         </Link>{' '}
                         {new Date().getFullYear()}
                         {'.'}

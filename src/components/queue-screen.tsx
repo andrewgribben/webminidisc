@@ -423,10 +423,6 @@ export function QueueScreen() {
                             </HardwareButton>
                         ) : null}
                     </div>
-                    <p className={classes.footerNote} style={{ margin: 0 }}>
-                        For albums and playlists, Save as a Playlist registers the download under Library → Playlists (so you can browse and
-                        encode the set together). Single-track URLs always land under Tracks only.
-                    </p>
                 </form>
                 {notice ? <p className={classes.notice}>{notice}</p> : null}
 
@@ -580,11 +576,6 @@ export function QueueScreen() {
                         </div>
                     ) : null}
                 </div>
-
-                <p className={classes.footerNote}>
-                    Downloads run in the background on this Downtify instance. Finished tracks appear in Library — open Library when a job
-                    completes to encode them to MiniDisc.
-                </p>
             </DeckPanel>
             <StatusStrip
                 left={<span>{aggregated.length} job{aggregated.length === 1 ? '' : 's'}</span>}
