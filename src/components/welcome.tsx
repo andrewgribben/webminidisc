@@ -100,7 +100,7 @@ const useStyles = makeStyles()((theme) => ({
     },
 }));
 
-export const Welcome = (props: {}) => {
+export const Welcome = ({ shellDialogs = true }: { shellDialogs?: boolean }) => {
     const { classes } = useStyles();
     const dispatch = useDispatch();
     const {
@@ -310,7 +310,7 @@ export const Welcome = (props: {}) => {
                     </React.Fragment>
                 )}
             </Box>
-            <SettingsDialog />
+            {shellDialogs ? <SettingsDialog /> : null}
             <ManageEncodersDialog />
             <AboutDialog />
             <ChangelogDialog />

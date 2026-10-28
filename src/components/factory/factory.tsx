@@ -29,7 +29,6 @@ import { FactoryModeProgressDialog } from './factory-progress-dialog';
 import { FactoryModeEditOtherValuesDialog } from './factory-edit-other-values-dialog';
 import { FactoryTopMenu } from './factory-topmenu';
 import { FactoryModeBadSectorDialog } from './factory-bad-sector-dialog';
-import { SettingsDialog } from '../settings-dialog';
 import { AppDispatch } from '../../redux/store';
 import { getDeviceNameFromTOCSignature } from '../../utils';
 import { ManageEncodersDialog } from '../manage-encoders-dialog';
@@ -626,7 +625,6 @@ const Toc = () => {
             <FactoryModeProgressDialog />
             <FactoryModeBadSectorDialog />
             <FactoryModeEditOtherValuesDialog />
-            <SettingsDialog />
             <ManageEncodersDialog />
         </React.Fragment>
     );
