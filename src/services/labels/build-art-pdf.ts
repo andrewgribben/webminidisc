@@ -102,6 +102,92 @@ function truncateToWidth(font: PDFFont, text: string, size: number, maxWidth: nu
     return `${t}…`;
 }
 
+/** Prefer fitting every track; shrink type, then dual-column, before ellipsis. */
+function fitTracklistMetrics(trackCount: number, availableHeight: number, preferredSize = 5.8, minSize = 3.4) {
+    const gapRatio = 1.8 / 5.8;
+    const tryFit = (columns: 1 | 2, size: number) => {
+        const lineH = size + size * gapRatio;
+        const rows = Math.ceil(Math.max(trackCount, 1) / columns);
+        return { size, lineH, columns, rows, fits: rows * lineH <= availableHeight + 0.01 };
+    };
+
+    for (const columns of [1, 2] as const) {
+        let size = preferredSize;
+        while (size >= minSize) {
+            const metrics = tryFit(columns, size);
+            if (metrics.fits) {
+                return metrics;
+            }
+            size = Math.round((size - 0.2) * 10) / 10;
+        }
+    }
+
+    const columns: 1 | 2 = trackCount > 12 ? 2 : 1;
+    const size = minSize;
+    const lineH = size + size * gapRatio;
+    const rows = Math.ceil(Math.max(trackCount, 1) / columns);
+    return { size, lineH, columns, rows, fits: false };
+}
+
+function drawTrackRows(
+    page: PDFPage,
+    font: PDFFont,
+    tracks: LabelDiscInfo['tracks'],
+    area: { x: number; yBottom: number; width: number; topY: number },
+    ink: RGB,
+    preferredSize = 5.8
+) {
+    const availableHeight = area.topY - area.yBottom;
+    if (availableHeight < preferredSize || tracks.length === 0) {
+        return;
+    }
+
+    const metrics = fitTracklistMetrics(tracks.length, availableHeight, preferredSize);
+    const colGap = 2 * PT_PER_MM;
+    const colWidth =
+        metrics.columns === 1 ? area.width : (area.width - colGap) / 2;
+    const rowsPerCol = Math.ceil(tracks.length / metrics.columns);
+    let shown = 0;
+
+    for (let col = 0; col < metrics.columns; col++) {
+        const colX = area.x + col * (colWidth + colGap);
+        let cursorY = area.topY - metrics.size;
+        const start = col * rowsPerCol;
+        const end = Math.min(tracks.length, start + rowsPerCol);
+
+        for (let i = start; i < end; i++) {
+            if (cursorY < area.yBottom) {
+                if (shown < tracks.length) {
+                    page.drawText('···', {
+                        x: colX,
+                        y: Math.max(area.yBottom, cursorY),
+                        size: metrics.size,
+                        font,
+                        color: ink,
+                    });
+                }
+                return;
+            }
+            const track = tracks[i];
+            const idx = String(track.index + 1).padStart(2, '0');
+            const dur = formatTimeFromSeconds(track.durationSec, false);
+            const durW = font.widthOfTextAtSize(dur, metrics.size);
+            const nameMax = colWidth - durW - 2;
+            const name = truncateToWidth(font, `${idx}  ${track.title || 'Untitled'}`, metrics.size, nameMax);
+            page.drawText(name, { x: colX, y: cursorY, size: metrics.size, font, color: ink });
+            page.drawText(dur, {
+                x: colX + colWidth - durW,
+                y: cursorY,
+                size: metrics.size,
+                font,
+                color: ink,
+            });
+            cursorY -= metrics.lineH;
+            shown += 1;
+        }
+    }
+}
+
 /** Draw text with slight tracking (Nothing / TE product-label feel). */
 function drawTrackedText(
     page: PDFPage,
@@ -182,37 +268,26 @@ function drawTypographicFaceOrBox(
 
     const total = formatTimeFromSeconds(disc.totalDurationSec, false);
     const meta = `${String(disc.tracks.length).padStart(2, '0')} TR · ${total}`;
-    const metaSize = 6;
+    const metaSize = disc.tracks.length > 14 ? 5.2 : 6;
     drawTrackedText(page, font, meta, contentX + pad, cursorY, metaSize, ink, 0.4);
-    cursorY -= metaSize + 5;
+    cursorY -= metaSize + (disc.tracks.length > 14 ? 3 : 5);
 
     if (!opts.showTracks) {
         return;
     }
 
-    const trackSize = 5.8;
-    const lineH = trackSize + 1.8;
-    const minY = box.y + pad;
-    for (const track of disc.tracks) {
-        if (cursorY < minY + lineH) {
-            page.drawText('···', { x: contentX + pad, y: cursorY, size: trackSize, font, color: ink });
-            break;
-        }
-        const idx = String(track.index + 1).padStart(2, '0');
-        const dur = formatTimeFromSeconds(track.durationSec, false);
-        const durW = font.widthOfTextAtSize(dur, trackSize);
-        const nameMax = contentW - pad * 2 - durW - 3;
-        const name = truncateToWidth(font, `${idx}  ${track.title || 'Untitled'}`, trackSize, nameMax);
-        page.drawText(name, { x: contentX + pad, y: cursorY, size: trackSize, font, color: ink });
-        page.drawText(dur, {
-            x: contentX + contentW - pad - durW,
-            y: cursorY,
-            size: trackSize,
-            font,
-            color: ink,
-        });
-        cursorY -= lineH;
-    }
+    drawTrackRows(
+        page,
+        font,
+        disc.tracks,
+        {
+            x: contentX + pad,
+            yBottom: box.y + pad,
+            width: contentW - pad * 2,
+            topY: cursorY,
+        },
+        ink
+    );
 }
 
 function drawTypographicEdge(
@@ -276,22 +351,19 @@ function drawAlbumFaceTracklist(
     page.drawText(title, { x: box.x + pad, y: cursorY, size: titleSize, font: fontBold, color: ink });
     cursorY -= titleSize + 3;
 
-    const trackSize = 6.2;
-    const lineH = trackSize + 1.6;
-    const minY = box.y + pad;
-    for (const track of disc.tracks) {
-        if (cursorY < minY + lineH) {
-            page.drawText('…', { x: box.x + pad, y: cursorY, size: trackSize, font, color: ink });
-            break;
-        }
-        const idx = String(track.index + 1).padStart(2, '0');
-        const dur = formatTimeFromSeconds(track.durationSec, false);
-        const durW = font.widthOfTextAtSize(dur, trackSize);
-        const name = truncateToWidth(font, `${idx}  ${track.title || 'Untitled'}`, trackSize, box.width - pad * 2 - durW - 3);
-        page.drawText(name, { x: box.x + pad, y: cursorY, size: trackSize, font, color: ink });
-        page.drawText(dur, { x: box.x + box.width - pad - durW, y: cursorY, size: trackSize, font, color: ink });
-        cursorY -= lineH;
-    }
+    drawTrackRows(
+        page,
+        font,
+        disc.tracks,
+        {
+            x: box.x + pad,
+            yBottom: box.y + pad,
+            width: box.width - pad * 2,
+            topY: cursorY,
+        },
+        ink,
+        6.2
+    );
 }
 
 function drawAlbumEdgeTitle(
