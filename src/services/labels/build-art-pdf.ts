@@ -4,7 +4,10 @@ import {
     PDFImage,
     PDFPage,
     clip,
+    closePath,
     endPath,
+    lineTo,
+    moveTo,
     popGraphicsState,
     pushGraphicsState,
     rectangle,
@@ -15,7 +18,9 @@ import {
 import {
     A4LabelLayout,
     ALL_PARTS,
+    DOG_EAR_MM,
     LabelPartId,
+    LabelPartLayout,
     RectMm,
     createA4LabelLayout,
     mmSizeToPdfPoints,
@@ -534,23 +539,100 @@ export async function buildArtPdf(input: LabelPackInput, layout: A4LabelLayout =
     return pdf.save();
 }
 
-/** One page per part at exact cut size (no bleed / overprint). */
-export async function buildCutSizedPartPdf(
+/** Append cut outline in PDF space (origin bottom-left). */
+function cutOutlineOperators(box: PdfBox, dogEar: boolean, earPt: number) {
+    const { x, y, width, height } = box;
+    if (!dogEar) {
+        return [moveTo(x, y), lineTo(x + width, y), lineTo(x + width, y + height), lineTo(x, y + height), closePath()];
+    }
+    return [
+        moveTo(x, y),
+        lineTo(x + width, y),
+        lineTo(x + width, y + height - earPt),
+        lineTo(x + width - earPt, y + height),
+        lineTo(x, y + height),
+        closePath(),
+    ];
+}
+
+function clipToCut(page: PDFPage, box: PdfBox, dogEar: boolean) {
+    const earPt = DOG_EAR_MM * PT_PER_MM;
+    page.pushOperators(pushGraphicsState(), ...cutOutlineOperators(box, dogEar, earPt), clip(), endPath());
+}
+
+function strokeCutBorder(page: PDFPage, box: PdfBox, dogEar: boolean, borderPt = 2) {
+    const earPt = DOG_EAR_MM * PT_PER_MM;
+    const { x, y, width, height } = box;
+    const ink = rgb(0, 0, 0);
+    const segments: Array<{ start: { x: number; y: number }; end: { x: number; y: number } }> = dogEar
+        ? [
+              { start: { x, y }, end: { x: x + width, y } },
+              { start: { x: x + width, y }, end: { x: x + width, y: y + height - earPt } },
+              { start: { x: x + width, y: y + height - earPt }, end: { x: x + width - earPt, y: y + height } },
+              { start: { x: x + width - earPt, y: y + height }, end: { x, y: y + height } },
+              { start: { x, y: y + height }, end: { x, y } },
+          ]
+        : [
+              { start: { x, y }, end: { x: x + width, y } },
+              { start: { x: x + width, y }, end: { x: x + width, y: y + height } },
+              { start: { x: x + width, y: y + height }, end: { x, y: y + height } },
+              { start: { x, y: y + height }, end: { x, y } },
+          ];
+    for (const segment of segments) {
+        page.drawLine({ ...segment, thickness: borderPt, color: ink });
+    }
+}
+
+/**
+ * A4 sheet with all labels at exact cut size (no bleed), each outlined with a 2pt border.
+ */
+export async function buildBorderedArtPdf(
     input: LabelPackInput,
-    partId: LabelPartId,
     layout: A4LabelLayout = createA4LabelLayout()
 ): Promise<Uint8Array> {
-    const part = layout.parts[partId];
-    const { width, height } = mmSizeToPdfPoints(part.cut.width, part.cut.height);
     const pdf = await PDFDocument.create();
-    const page = pdf.addPage([width, height]);
+    const page = pdf.addPage([layout.page.width * PT_PER_MM, layout.page.height * PT_PER_MM]);
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const include = new Set(input.parts.length ? input.parts : ALL_PARTS);
+
+    page.drawRectangle({
+        x: 0,
+        y: 0,
+        width: layout.page.width * PT_PER_MM,
+        height: layout.page.height * PT_PER_MM,
+        color: rgb(1, 1, 1),
+    });
+
+    drawRegistrationMarks(page, layout);
+
     const coverImage = input.artMode === 'album' ? await embedCoverOrNull(pdf, input.coverBytes, input.coverMime) : null;
     if (input.artMode === 'album' && !coverImage) {
         throw new Error('Album art could not be embedded into the PDF (unsupported image format).');
     }
-    const box = { x: 0, y: 0, width, height };
-    drawPartContent(page, font, fontBold, input, partId, { fill: box, content: box }, coverImage, part.spineFoldX);
+
+    for (const id of ALL_PARTS as LabelPartId[]) {
+        if (!include.has(id)) {
+            continue;
+        }
+        const part: LabelPartLayout = layout.parts[id];
+        const cutBox = topLeftRectToPdf(layout, part.cut);
+        const dogEar = Boolean(part.dogEar);
+
+        clipToCut(page, cutBox, dogEar);
+        drawPartContent(
+            page,
+            font,
+            fontBold,
+            input,
+            id,
+            { fill: cutBox, content: cutBox },
+            coverImage,
+            part.spineFoldX
+        );
+        page.pushOperators(popGraphicsState());
+        strokeCutBorder(page, cutBox, dogEar, 2);
+    }
+
     return pdf.save();
 }
