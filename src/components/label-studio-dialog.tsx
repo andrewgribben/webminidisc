@@ -19,7 +19,13 @@ import JSZip from 'jszip';
 import { useDispatch, useShallowEqualSelector } from '../frontend-utils';
 import { downloadBlob, formatTimeFromSeconds, getTracks } from '../utils';
 import { Disc } from '../services/interfaces/netmd';
-import { ALL_PARTS, LabelPartId, discToLabelInfo, ensureLabelPack } from '../services/labels/label-pack';
+import {
+    ALL_PARTS,
+    LabelPartId,
+    buildBorderedLabelExport,
+    discToLabelInfo,
+    ensureLabelPack,
+} from '../services/labels/label-pack';
 import { FACE_CUT, EDGE_CUT, BOX_CUT } from '../services/labels/a4-layout';
 import { DEFAULT_LABEL_THEME, LABEL_THEMES, customTheme } from '../services/labels/themes';
 import { DEMO_ALBUM_COVER_URL, DEMO_ALBUM_DISC, DEMO_MIX_DISC, loadDemoAlbumCover } from '../services/labels/demo-disc';
@@ -74,8 +80,9 @@ export function LabelStudioDialog({
     const [status, setStatus] = useState('');
     const [artMode, setArtMode] = useState<LabelArtMode>('typographic');
     const [theme, setTheme] = useState<LabelTheme>(DEFAULT_LABEL_THEME);
-    const [customBg, setCustomBg] = useState('#F7F5F0');
-    const [customText, setCustomText] = useState('#111111');
+    const [customBg, setCustomBg] = useState(DEFAULT_LABEL_THEME.background);
+    const [customText, setCustomText] = useState(DEFAULT_LABEL_THEME.text);
+    const [customAccent, setCustomAccent] = useState(DEFAULT_LABEL_THEME.accent);
     const [forceTypographic, setForceTypographic] = useState(false);
     const [artPdf, setArtPdf] = useState<Uint8Array | null>(null);
     const [cutSvg, setCutSvg] = useState<string | null>(null);
@@ -91,7 +98,8 @@ export function LabelStudioDialog({
     );
     const trackCount = disc ? getTracks(disc).length : 0;
 
-    const activeTheme = theme.id === 'custom' ? customTheme(customBg, customText) : theme;
+    const activeTheme =
+        theme.id === 'custom' ? customTheme(customBg, customText, customAccent) : theme;
 
     const persistTitleCover = useCallback(
         async (info: NonNullable<typeof labelDisc>, coverTheme: LabelTheme): Promise<string | null> => {
@@ -309,7 +317,47 @@ export function LabelStudioDialog({
 
     const applyTheme = (next: LabelTheme) => {
         setTheme(next);
-        void generate({ forceRegenerate: true, theme: next.id === 'custom' ? customTheme(customBg, customText) : next });
+        if (next.id !== 'custom') {
+            setCustomBg(next.background);
+            setCustomText(next.text);
+            setCustomAccent(next.accent);
+        }
+        void generate({ forceRegenerate: true, theme: next });
+    };
+
+    const downloadBorderedLabels = async () => {
+        if (!disc || !labelDisc) {
+            return;
+        }
+        setLoading(true);
+        setError('');
+        try {
+            const pngs = await buildBorderedLabelExport({
+                disc,
+                libraryTitle: designMode ? disc.title : libraryTitle,
+                coverUrl: designMode ? (demoCover ? DEMO_ALBUM_COVER_URL : null) : coverUrl,
+                coverBytes: designMode ? demoCover?.bytes ?? null : null,
+                coverMime: designMode ? demoCover?.mime ?? null : null,
+                theme: activeTheme,
+                forceTypographic: forceTypographic || (designMode && demoKind === 'mix'),
+                parts: ALL_PARTS,
+            });
+            if (pngs.length === 0) {
+                throw new Error('Bordered label export produced no images.');
+            }
+            const base = (labelDisc.title || 'minidisc').replace(/[^\w\-]+/g, '_').slice(0, 48);
+            const zip = new JSZip();
+            for (const png of pngs) {
+                zip.file(`${base}-${png.id}-bordered.png`, png.bytes);
+            }
+            const blob = await zip.generateAsync({ type: 'blob' });
+            downloadBlob(blob, `${base}-bordered-labels.zip`);
+            setStatus('Bordered label PNGs downloaded (cut size, 2px border).');
+        } catch (reason: unknown) {
+            setError(reason instanceof Error ? reason.message : 'Bordered label export failed.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -421,11 +469,20 @@ export function LabelStudioDialog({
                                             sx={{ flex: 1 }}
                                             InputLabelProps={{ shrink: true }}
                                         />
+                                        <TextField
+                                            label="Accent"
+                                            size="small"
+                                            type="color"
+                                            value={customAccent}
+                                            onChange={(e) => setCustomAccent(e.target.value)}
+                                            sx={{ flex: 1 }}
+                                            InputLabelProps={{ shrink: true }}
+                                        />
                                     </Box>
                                     <Button
                                         size="small"
                                         variant="outlined"
-                                        onClick={() => applyTheme(customTheme(customBg, customText))}
+                                        onClick={() => applyTheme(customTheme(customBg, customText, customAccent))}
                                     >
                                         Apply custom colours
                                     </Button>
@@ -505,6 +562,7 @@ export function LabelStudioDialog({
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                                 Art PDF (A4, with bleed) + cut SVG (aligned marks). Print at 100% scale.
+                                Bordered PNGs are cut size only (no overprint) with a 2px outline.
                             </Typography>
                             <Button
                                 variant="contained"
@@ -519,6 +577,13 @@ export function LabelStudioDialog({
                             </Button>
                             <Button variant="outlined" disabled={!cutSvg || loading} onClick={downloadCutSvg}>
                                 Cut SVG
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                disabled={!disc || loading}
+                                onClick={() => void downloadBorderedLabels()}
+                            >
+                                Bordered labels (PNG)
                             </Button>
                             {ALL_PARTS.map((id) => (
                                 <Button
