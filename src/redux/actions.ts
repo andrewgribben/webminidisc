@@ -9,9 +9,11 @@ import { actions as encoderDownloadDialog } from './encoder-download-dialog-feat
 import { actions as appStateActions } from './app-feature';
 import { actions as mainActions } from './main-feature';
 import { actions as convertDialogActions } from './convert-dialog-feature';
+import { actions as discLibraryActions } from './disc-library-feature';
 import { actions as songRecognitionDialogActions, TitleEntry } from './song-recognition-dialog-feature';
 import { actions as songRecognitionProgressDialogActions } from './song-recognition-progress-dialog-feature';
 import serviceRegistry from '../services/registry';
+import { updateDiscTitle } from '../services/md-library';
 import { UnknownAction } from '@reduxjs/toolkit';
 import {
     sleepWithProgressCallback,
@@ -499,13 +501,28 @@ export function himdRenameTrack(...entries: { index: number; title?: string; alb
 }
 
 export function renameDisc({ newName, newFullWidthName }: { newName: string; newFullWidthName?: string }) {
-    return async function (dispatch: AppDispatch) {
+    return async function (dispatch: AppDispatch, getState: () => RootState) {
         const { netmdService } = serviceRegistry;
-        await netmdService!.renameDisc(
-            newName.replace(/\/\//g, ' /'), // Make sure the title doesn't interfere with the groups
-            newFullWidthName?.replace(/／／/g, '／')
-        );
+        const halfWidthTitle = newName.replace(/\/\//g, ' /'); // Make sure the title doesn't interfere with the groups
+        const fullWidthTitle = newFullWidthName?.replace(/／／/g, '／');
+        await netmdService!.renameDisc(halfWidthTitle, fullWidthTitle);
         dispatch(renameDialogActions.setVisible(false));
+
+        // Keep the metadata library / label art title in sync with the on-disc rename.
+        // Otherwise a prior "Untitled Disc" library row keeps winning in the UI and art.
+        const syncedTitle = (fullWidthTitle || halfWidthTitle).trim() || halfWidthTitle.trim() || null;
+        const library = getState().discLibrary;
+        if (library.discId != null || library.title != null) {
+            dispatch(discLibraryActions.setTitle(syncedTitle));
+        }
+        if (library.discId != null && syncedTitle) {
+            try {
+                await updateDiscTitle(library.discId, syncedTitle);
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
         listContent()(dispatch);
     };
 }

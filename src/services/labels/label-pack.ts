@@ -1,5 +1,5 @@
 import { Disc } from '../interfaces/netmd';
-import { discSignature, libraryAssetUrl } from '../md-library';
+import { discSignature, libraryAssetUrl, resolveDiscTitle } from '../md-library';
 import { getTracks } from '../../utils';
 import { ALL_PARTS, LabelPartId, createA4LabelLayout } from './a4-layout';
 import { buildArtPdf } from './build-art-pdf';
@@ -20,7 +20,7 @@ export function discToLabelInfo(disc: Disc, libraryTitle?: string | null): Label
     const uniqueArtists = [...new Set(artists)];
     const artist =
         uniqueArtists.length === 1 ? uniqueArtists[0] : uniqueArtists.length > 1 ? 'Various Artists' : null;
-    const title = (libraryTitle || disc.fullWidthTitle || disc.title || 'Untitled Disc').trim() || 'Untitled Disc';
+    const title = resolveDiscTitle(disc, libraryTitle);
     const totalDurationSec = tracks.reduce((sum, t) => sum + t.durationSec, 0);
     return { title, artist, tracks, totalDurationSec };
 }

@@ -127,9 +127,31 @@ export async function discSignature(disc: Disc): Promise<string> {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+/** True for empty / generic titles that should not override a real on-disc name. */
+export function isPlaceholderDiscTitle(title: string | null | undefined): boolean {
+    const normalized = (title || '').trim().toLowerCase();
+    return !normalized || normalized === 'untitled' || normalized === 'untitled disc' || normalized === 'untitled album';
+}
+
+/**
+ * Label/art title: prefer a meaningful library title (e.g. MusicBrainz match),
+ * otherwise the live disc title. Never let a stored "Untitled Disc" beat a rename.
+ */
+export function resolveDiscTitle(disc: Disc, libraryTitle?: string | null): string {
+    const fromDisc = (disc.fullWidthTitle || disc.title || '').split('//')[0].trim();
+    const fromLibrary = (libraryTitle || '').trim();
+    if (!isPlaceholderDiscTitle(fromLibrary)) {
+        return fromLibrary;
+    }
+    if (!isPlaceholderDiscTitle(fromDisc)) {
+        return fromDisc;
+    }
+    return 'Untitled Disc';
+}
+
 export function albumHint(disc: Disc): string | undefined {
     const title = (disc.fullWidthTitle || disc.title || '').split('//')[0].trim();
-    if (!title || title.toLowerCase() === 'untitled disc') {
+    if (isPlaceholderDiscTitle(title)) {
         return undefined;
     }
     return title;
@@ -262,6 +284,11 @@ export function releaseDetails(mbid: string, disc: Disc): Promise<ReleaseDetails
 
 export async function saveDisc(body: DiscCreateBody): Promise<SavedDisc> {
     return sendJson<SavedDisc>('/api/discs', 'POST', body);
+}
+
+export async function updateDiscTitle(discId: number, discTitle: string): Promise<void> {
+    const params = new URLSearchParams({ disc_title: discTitle });
+    await sendJson<{ status: string; disc_id: number }>(`/api/discs/${discId}?${params.toString()}`, 'PUT');
 }
 
 export async function matchKnownDisc(disc: Disc): Promise<DiscMatch> {
