@@ -28,6 +28,9 @@ const slice = createSlice({
         setStatus: (state, action: PayloadAction<string>) => {
             state.status = action.payload;
         },
+        setTitle: (state, action: PayloadAction<string | null>) => {
+            state.title = action.payload;
+        },
         setLibrary: (
             state,
             action: PayloadAction<{ discId: number; title: string | null; coverUrl: string | null; audioIndexes: number[] }>

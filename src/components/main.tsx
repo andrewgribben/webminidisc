@@ -108,6 +108,7 @@ import { LocalLibraryDialog } from './local-library';
 import { MatchAlbumDialog } from './match-album-dialog';
 import { LabelStudioDialog } from './label-studio-dialog';
 import { DowntifyLibraryService } from '../services/library/downtify-library';
+import { isPlaceholderDiscTitle } from '../services/md-library';
 import { actions as discLibraryActions } from '../redux/disc-library-feature';
 import { loadKnownDisc, saveDiscAudio } from '../redux/disc-library-actions';
 import { Menu, MenuItem } from '@mui/material';
@@ -810,6 +811,18 @@ export const Main = ({ deckVisible = true, bindEncodeFiles, shellDialogs = true 
                 ? `${formatTimeFromSeconds(disc.used)} of ${formatTimeFromSeconds(disc.total)}`
                 : `${bytesToHumanReadable(disc.used)} of ${bytesToHumanReadable(disc.total)}`;
     const discTitleText = disc ? disc.title || 'Untitled Disc' : 'No disc';
+    // Prefer a meaningful library album name when it differs from the on-disc title.
+    // Never show a stale "Untitled Disc" under a renamed disc.
+    const discMetaLabel = (() => {
+        if (!isPlaceholderDiscTitle(albumTitle)) {
+            const album = albumTitle!.trim();
+            const live = (disc?.fullWidthTitle || disc?.title || '').trim();
+            if (!live || album.toLowerCase() !== live.toLowerCase()) {
+                return album;
+            }
+        }
+        return defaultCodecName || 'MiniDisc';
+    })();
     const canDownload = deviceCapabilities.trackDownload || factoryModeRippingInMainUi;
 
     const handleRecognize = useCallback(() => {
@@ -924,7 +937,7 @@ export const Main = ({ deckVisible = true, bindEncodeFiles, shellDialogs = true 
                                         {discTitleText}
                                     </h2>
                                     <div className={classes.discSub}>
-                                        {albumTitle || defaultCodecName || 'MiniDisc'}
+                                        {discMetaLabel}
                                         {tracks.length ? ` · ${tracks.length} tracks` : ''}
                                     </div>
                                 </div>
