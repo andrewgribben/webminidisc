@@ -7,6 +7,7 @@ import { buildCutSvg } from './build-cut-svg';
 import { getCachedLabelPack, putCachedLabelPack } from './label-cache';
 import { DEFAULT_LABEL_THEME } from './themes';
 import { LabelArtMode, LabelDiscInfo, LabelPackArtifacts, LabelPackInput, LabelTheme } from './types';
+import type { BorderedLabelPng } from './build-bordered-labels';
 
 export function discToLabelInfo(disc: Disc, libraryTitle?: string | null): LabelDiscInfo {
     const tracks = getTracks(disc).map((track) => ({
@@ -158,5 +159,41 @@ export async function ensureLabelPack(options: EnsureLabelPackOptions): Promise<
     };
 }
 
+/** Cut-size bordered PNGs (no bleed), same cover/theme resolution as the A4 pack. */
+export async function buildBorderedLabelExport(
+    options: EnsureLabelPackOptions
+): Promise<BorderedLabelPng[]> {
+    const parts = options.parts?.length ? options.parts : ALL_PARTS;
+    const labelDisc = discToLabelInfo(options.disc, options.libraryTitle);
+    const theme = options.theme ?? DEFAULT_LABEL_THEME;
+
+    const hasCoverSource = Boolean(options.coverBytes?.length || options.coverUrl);
+    const wantsAlbumArt = hasCoverSource && !options.forceTypographic;
+    let cover: { bytes: Uint8Array; mime: string } | null = null;
+    if (wantsAlbumArt) {
+        if (options.coverBytes?.length) {
+            cover = { bytes: options.coverBytes, mime: options.coverMime || 'image/png' };
+        } else {
+            cover = await fetchCoverBytes(options.coverUrl);
+        }
+    }
+    if (wantsAlbumArt && !cover) {
+        throw new Error(
+            'Could not load album art for bordered labels. Try Match album again, or use typographic style.'
+        );
+    }
+
+    const { buildBorderedLabelPngs } = await import('./build-bordered-labels');
+    return buildBorderedLabelPngs({
+        disc: labelDisc,
+        artMode: cover ? 'album' : 'typographic',
+        theme,
+        coverBytes: cover?.bytes ?? null,
+        coverMime: cover?.mime ?? null,
+        parts,
+    });
+}
+
 export { ALL_PARTS };
 export type { LabelPartId };
+export type { BorderedLabelPng };

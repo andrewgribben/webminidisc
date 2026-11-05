@@ -453,6 +453,42 @@ async function embedCoverOrNull(pdf: PDFDocument, bytes: Uint8Array | null, mime
     return tryEmbed(png, 'png');
 }
 
+type PdfBox = { x: number; y: number; width: number; height: number };
+
+function drawPartContent(
+    page: PDFPage,
+    font: PDFFont,
+    fontBold: PDFFont,
+    input: LabelPackInput,
+    id: LabelPartId,
+    boxes: { fill: PdfBox; content: PdfBox },
+    coverImage: PDFImage | null,
+    spineWMm?: number
+) {
+    if (input.artMode === 'album' && coverImage) {
+        fitCoverDraw(page, coverImage, boxes.fill);
+        if (id === 'face') {
+            drawAlbumFaceTracklist(page, font, fontBold, input.disc, boxes.content);
+        } else if (id === 'edge') {
+            drawAlbumEdgeTitle(page, fontBold, input.disc, boxes.content);
+        }
+        return;
+    }
+
+    page.drawRectangle({ ...boxes.fill, color: colorFromHex(input.theme.background) });
+    if (id === 'edge') {
+        drawTypographicEdge(page, fontBold, input.disc, input.theme, boxes.content);
+    } else if (id === 'face') {
+        drawTypographicFaceOrBox(page, font, fontBold, input.disc, input.theme, boxes.content, { showTracks: true });
+    } else {
+        drawTypographicFaceOrBox(page, font, fontBold, input.disc, input.theme, boxes.content, {
+            showTracks: true,
+            showSpineBar: true,
+            spineW: (spineWMm ?? 0) * PT_PER_MM,
+        });
+    }
+}
+
 export async function buildArtPdf(input: LabelPackInput, layout: A4LabelLayout = createA4LabelLayout()): Promise<Uint8Array> {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([layout.page.width * PT_PER_MM, layout.page.height * PT_PER_MM]);
@@ -480,35 +516,41 @@ export async function buildArtPdf(input: LabelPackInput, layout: A4LabelLayout =
             continue;
         }
         const part = layout.parts[id];
-        const bleedBox = topLeftRectToPdf(layout, part.bleed);
-        const cutBox = topLeftRectToPdf(layout, part.cut);
-
-        if (input.artMode === 'album' && coverImage) {
-            // Cover fills the bleed box (cover/crop). No theme colours in album mode.
-            fitCoverDraw(page, coverImage, bleedBox);
-            if (id === 'face') {
-                drawAlbumFaceTracklist(page, font, fontBold, input.disc, cutBox);
-            } else if (id === 'edge') {
-                drawAlbumEdgeTitle(page, fontBold, input.disc, cutBox);
-            }
-            // box: album art only — no text
-            continue;
-        }
-
-        // Typographic mix-disc mode
-        page.drawRectangle({ ...bleedBox, color: colorFromHex(input.theme.background) });
-        if (id === 'edge') {
-            drawTypographicEdge(page, fontBold, input.disc, input.theme, cutBox);
-        } else if (id === 'face') {
-            drawTypographicFaceOrBox(page, font, fontBold, input.disc, input.theme, cutBox, { showTracks: true });
-        } else {
-            drawTypographicFaceOrBox(page, font, fontBold, input.disc, input.theme, cutBox, {
-                showTracks: true,
-                showSpineBar: true,
-                spineW: (part.spineFoldX ?? 0) * PT_PER_MM,
-            });
-        }
+        drawPartContent(
+            page,
+            font,
+            fontBold,
+            input,
+            id,
+            {
+                fill: topLeftRectToPdf(layout, part.bleed),
+                content: topLeftRectToPdf(layout, part.cut),
+            },
+            coverImage,
+            part.spineFoldX
+        );
     }
 
+    return pdf.save();
+}
+
+/** One page per part at exact cut size (no bleed / overprint). */
+export async function buildCutSizedPartPdf(
+    input: LabelPackInput,
+    partId: LabelPartId,
+    layout: A4LabelLayout = createA4LabelLayout()
+): Promise<Uint8Array> {
+    const part = layout.parts[partId];
+    const { width, height } = mmSizeToPdfPoints(part.cut.width, part.cut.height);
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([width, height]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const coverImage = input.artMode === 'album' ? await embedCoverOrNull(pdf, input.coverBytes, input.coverMime) : null;
+    if (input.artMode === 'album' && !coverImage) {
+        throw new Error('Album art could not be embedded into the PDF (unsupported image format).');
+    }
+    const box = { x: 0, y: 0, width, height };
+    drawPartContent(page, font, fontBold, input, partId, { fill: box, content: box }, coverImage, part.spineFoldX);
     return pdf.save();
 }
