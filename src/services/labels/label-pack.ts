@@ -2,12 +2,11 @@ import { Disc } from '../interfaces/netmd';
 import { discSignature, libraryAssetUrl, resolveDiscTitle } from '../md-library';
 import { getTracks } from '../../utils';
 import { ALL_PARTS, LabelPartId, createA4LabelLayout } from './a4-layout';
-import { buildArtPdf } from './build-art-pdf';
+import { buildArtPdf, buildBorderedArtPdf } from './build-art-pdf';
 import { buildCutSvg } from './build-cut-svg';
 import { getCachedLabelPack, putCachedLabelPack } from './label-cache';
 import { DEFAULT_LABEL_THEME } from './themes';
 import { LabelArtMode, LabelDiscInfo, LabelPackArtifacts, LabelPackInput, LabelTheme } from './types';
-import type { BorderedLabelPng } from './build-bordered-labels';
 
 export function discToLabelInfo(disc: Disc, libraryTitle?: string | null): LabelDiscInfo {
     const tracks = getTracks(disc).map((track) => ({
@@ -84,10 +83,9 @@ export interface EnsureLabelPackOptions {
     skipCache?: boolean;
 }
 
-export async function ensureLabelPack(options: EnsureLabelPackOptions): Promise<LabelPackArtifacts & { fromCache: boolean }> {
+async function resolveLabelInput(options: EnsureLabelPackOptions): Promise<LabelPackInput> {
     const parts = options.parts?.length ? options.parts : ALL_PARTS;
     const labelDisc = discToLabelInfo(options.disc, options.libraryTitle);
-    const signature = await discSignature(options.disc);
     const theme = options.theme ?? DEFAULT_LABEL_THEME;
 
     const hasCoverSource = Boolean(options.coverBytes?.length || options.coverUrl);
@@ -106,8 +104,21 @@ export async function ensureLabelPack(options: EnsureLabelPackOptions): Promise<
         );
     }
 
-    const artMode: LabelArtMode = cover ? 'album' : 'typographic';
-    const fingerprint = await fingerprintLabelPack(labelDisc, artMode, theme, options.coverUrl, parts);
+    return {
+        disc: labelDisc,
+        artMode: cover ? 'album' : 'typographic',
+        theme,
+        coverBytes: cover?.bytes ?? null,
+        coverMime: cover?.mime ?? null,
+        parts,
+    };
+}
+
+export async function ensureLabelPack(options: EnsureLabelPackOptions): Promise<LabelPackArtifacts & { fromCache: boolean }> {
+    const parts = options.parts?.length ? options.parts : ALL_PARTS;
+    const signature = await discSignature(options.disc);
+    const input = await resolveLabelInput(options);
+    const fingerprint = await fingerprintLabelPack(input.disc, input.artMode, input.theme, options.coverUrl, parts);
 
     if (!options.forceRegenerate && !options.skipCache) {
         const cached = await getCachedLabelPack(signature);
@@ -123,28 +134,18 @@ export async function ensureLabelPack(options: EnsureLabelPackOptions): Promise<
         }
     }
 
-    const input: LabelPackInput = {
-        disc: labelDisc,
-        artMode,
-        theme,
-        coverBytes: cover?.bytes ?? null,
-        coverMime: cover?.mime ?? null,
-        parts,
-    };
-
     const layout = createA4LabelLayout();
     const artPdf = await buildArtPdf(input, layout);
     const cutSvg = buildCutSvg(parts, layout);
-    const finalFingerprint = await fingerprintLabelPack(labelDisc, artMode, theme, options.coverUrl, parts);
+    const finalFingerprint = await fingerprintLabelPack(input.disc, input.artMode, input.theme, options.coverUrl, parts);
 
     if (!options.skipCache) {
-        const artPdfCopy = artPdf.slice().buffer as ArrayBuffer;
         await putCachedLabelPack(signature, {
             fingerprint: finalFingerprint,
-            artMode,
-            theme,
+            artMode: input.artMode,
+            theme: input.theme,
             createdAt: Date.now(),
-            artPdf: artPdfCopy,
+            artPdf: artPdf.slice().buffer as ArrayBuffer,
             cutSvg,
         });
     }
@@ -153,47 +154,17 @@ export async function ensureLabelPack(options: EnsureLabelPackOptions): Promise<
         artPdf,
         cutSvg,
         fingerprint: finalFingerprint,
-        artMode,
-        theme,
+        artMode: input.artMode,
+        theme: input.theme,
         fromCache: false,
     };
 }
 
-/** Cut-size bordered PNGs (no bleed), same cover/theme resolution as the A4 pack. */
-export async function buildBorderedLabelExport(
-    options: EnsureLabelPackOptions
-): Promise<BorderedLabelPng[]> {
-    const parts = options.parts?.length ? options.parts : ALL_PARTS;
-    const labelDisc = discToLabelInfo(options.disc, options.libraryTitle);
-    const theme = options.theme ?? DEFAULT_LABEL_THEME;
-
-    const hasCoverSource = Boolean(options.coverBytes?.length || options.coverUrl);
-    const wantsAlbumArt = hasCoverSource && !options.forceTypographic;
-    let cover: { bytes: Uint8Array; mime: string } | null = null;
-    if (wantsAlbumArt) {
-        if (options.coverBytes?.length) {
-            cover = { bytes: options.coverBytes, mime: options.coverMime || 'image/png' };
-        } else {
-            cover = await fetchCoverBytes(options.coverUrl);
-        }
-    }
-    if (wantsAlbumArt && !cover) {
-        throw new Error(
-            'Could not load album art for bordered labels. Try Match album again, or use typographic style.'
-        );
-    }
-
-    const { buildBorderedLabelPngs } = await import('./build-bordered-labels');
-    return buildBorderedLabelPngs({
-        disc: labelDisc,
-        artMode: cover ? 'album' : 'typographic',
-        theme,
-        coverBytes: cover?.bytes ?? null,
-        coverMime: cover?.mime ?? null,
-        parts,
-    });
+/** A4 PDF with cut-size labels and 2pt borders (no bleed). */
+export async function buildBorderedLabelExport(options: EnsureLabelPackOptions): Promise<Uint8Array> {
+    const input = await resolveLabelInput(options);
+    return buildBorderedArtPdf(input);
 }
 
 export { ALL_PARTS };
 export type { LabelPartId };
-export type { BorderedLabelPng };

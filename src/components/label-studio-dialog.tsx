@@ -332,27 +332,22 @@ export function LabelStudioDialog({
         setLoading(true);
         setError('');
         try {
-            const pngs = await buildBorderedLabelExport({
+            // Colour pickers are the source of truth so export matches the UI even
+            // before "Apply custom colours" (presets also sync into these fields).
+            const exportTheme = customTheme(customBg, customText, customAccent);
+            const pdfBytes = await buildBorderedLabelExport({
                 disc,
                 libraryTitle: designMode ? disc.title : libraryTitle,
                 coverUrl: designMode ? (demoCover ? DEMO_ALBUM_COVER_URL : null) : coverUrl,
                 coverBytes: designMode ? demoCover?.bytes ?? null : null,
                 coverMime: designMode ? demoCover?.mime ?? null : null,
-                theme: activeTheme,
-                forceTypographic: forceTypographic || (designMode && demoKind === 'mix'),
+                theme: exportTheme,
+                forceTypographic: forceTypographic || artMode === 'typographic' || (designMode && demoKind === 'mix'),
                 parts: ALL_PARTS,
             });
-            if (pngs.length === 0) {
-                throw new Error('Bordered label export produced no images.');
-            }
             const base = (labelDisc.title || 'minidisc').replace(/[^\w\-]+/g, '_').slice(0, 48);
-            const zip = new JSZip();
-            for (const png of pngs) {
-                zip.file(`${base}-${png.id}-bordered.png`, png.bytes);
-            }
-            const blob = await zip.generateAsync({ type: 'blob' });
-            downloadBlob(blob, `${base}-bordered-labels.zip`);
-            setStatus('Bordered label PNGs downloaded (cut size, 2px border).');
+            downloadBlob(new Blob([asBlobPart(pdfBytes)], { type: 'application/pdf' }), `${base}-bordered-labels.pdf`);
+            setStatus('Bordered labels PDF downloaded (A4, cut size, 2pt border).');
         } catch (reason: unknown) {
             setError(reason instanceof Error ? reason.message : 'Bordered label export failed.');
         } finally {
@@ -456,7 +451,11 @@ export function LabelStudioDialog({
                                             size="small"
                                             type="color"
                                             value={customBg}
-                                            onChange={(e) => setCustomBg(e.target.value)}
+                                            onChange={(e) => {
+                                                const background = e.target.value;
+                                                setCustomBg(background);
+                                                setTheme(customTheme(background, customText, customAccent));
+                                            }}
                                             sx={{ flex: 1 }}
                                             InputLabelProps={{ shrink: true }}
                                         />
@@ -465,7 +464,11 @@ export function LabelStudioDialog({
                                             size="small"
                                             type="color"
                                             value={customText}
-                                            onChange={(e) => setCustomText(e.target.value)}
+                                            onChange={(e) => {
+                                                const text = e.target.value;
+                                                setCustomText(text);
+                                                setTheme(customTheme(customBg, text, customAccent));
+                                            }}
                                             sx={{ flex: 1 }}
                                             InputLabelProps={{ shrink: true }}
                                         />
@@ -474,7 +477,11 @@ export function LabelStudioDialog({
                                             size="small"
                                             type="color"
                                             value={customAccent}
-                                            onChange={(e) => setCustomAccent(e.target.value)}
+                                            onChange={(e) => {
+                                                const accent = e.target.value;
+                                                setCustomAccent(accent);
+                                                setTheme(customTheme(customBg, customText, accent));
+                                            }}
                                             sx={{ flex: 1 }}
                                             InputLabelProps={{ shrink: true }}
                                         />
@@ -562,7 +569,8 @@ export function LabelStudioDialog({
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                                 Art PDF (A4, with bleed) + cut SVG (aligned marks). Print at 100% scale.
-                                Bordered PNGs are cut size only (no overprint) with a 2px outline.
+                                Bordered PDF is the same A4 layout at cut size only (no overprint) with a
+                                2pt outline on each label.
                             </Typography>
                             <Button
                                 variant="contained"
@@ -583,7 +591,7 @@ export function LabelStudioDialog({
                                 disabled={!disc || loading}
                                 onClick={() => void downloadBorderedLabels()}
                             >
-                                Bordered labels (PNG)
+                                Bordered labels (PDF)
                             </Button>
                             {ALL_PARTS.map((id) => (
                                 <Button

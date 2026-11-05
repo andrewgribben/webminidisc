@@ -51,7 +51,6 @@
     "netmd-tocmanip": "^0.2.1",
     "networkwm-js": "^0.2.6",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^4.10.38",
     "prettier": "^3.2.5",
     "react": "^18.2.0",
     "react-beautiful-dnd": "^13.1.1",
