@@ -1,5 +1,5 @@
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import pdfWorkerAsset from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import {
     ALL_PARTS,
     DOG_EAR_MM,
@@ -9,12 +9,36 @@ import {
 import { buildCutSizedPartPdf } from './build-art-pdf';
 import { LabelPackInput } from './types';
 
-GlobalWorkerOptions.workerSrc = pdfWorker;
-
 const MM_PER_INCH = 25.4;
 /** Print-style raster for bordered cut-size exports. */
 const EXPORT_DPI = 300;
 const BORDER_PX = 2;
+
+let workerReady: Promise<void> | null = null;
+
+/**
+ * pdf.js workers are .mjs modules. Some reverse proxies serve them with a bad MIME
+ * type or the SPA HTML fallback, which breaks `import()`. Fetch the asset and expose
+ * it as a blob URL with an explicit JavaScript MIME type.
+ */
+function ensurePdfWorker(): Promise<void> {
+    if (!workerReady) {
+        workerReady = (async () => {
+            const workerUrl = new URL(pdfWorkerAsset, window.location.href).href;
+            const response = await fetch(workerUrl);
+            if (!response.ok) {
+                throw new Error(`Could not load the PDF worker (${response.status}).`);
+            }
+            const buffer = await response.arrayBuffer();
+            const blob = new Blob([buffer], { type: 'text/javascript' });
+            GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+        })().catch((error) => {
+            workerReady = null;
+            throw error;
+        });
+    }
+    return workerReady;
+}
 
 export interface BorderedLabelPng {
     id: LabelPartId;
@@ -52,6 +76,7 @@ function cutOutlinePath(
 }
 
 async function rasterizePdfPage(pdfBytes: Uint8Array, widthPx: number, heightPx: number): Promise<HTMLCanvasElement> {
+    await ensurePdfWorker();
     const loadingTask = getDocument({ data: pdfBytes.slice() });
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage(1);
